@@ -18,8 +18,7 @@ resource "aws_subnet" "vpc_subnets" {
 output "vpc_id" {
   value = aws_vpc.server_vpc.id
 }
-  
-output "subnets" {
-  value = aws_subnet.vpc_subnets
+ 
+output "subnet_ids" {
+  value = [ for each in aws_subnet.vpc_subnets : each.id ]
 }
-  
