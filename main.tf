@@ -33,9 +33,12 @@ module "k3s-ec2" {
 
   # instance related
   arch = var.arch
+  ami_id = var.ami_id
+  
   k3s_master_weighted_instance_types = var.k3s_master_weighted_instance_types
   k3s_workers_weighted_instance_types = var.k3s_workers_weighted_instance_types
-  ami_id = var.ami_id
+  
+  k3s_workers_desired_capacity = var.k3s_workers_desired_capacity
 
   tags = var.tags
 }
