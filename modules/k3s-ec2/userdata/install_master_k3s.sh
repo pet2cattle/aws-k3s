@@ -1,5 +1,8 @@
 #!/bin/bash
 
+set -x
+exec > /var/log/userdata.log 2>&1
+
 INSTANCE_ID=$(curl -s http://169.254.169.254/latest/meta-data/instance-id)
 EXISTING_HOSTNAME=$(cat /etc/hostname)
 
@@ -9,12 +12,11 @@ hostname $INSTANCE_ID
 sudo sed -i "s/$EXISTING_HOSTNAME/$INSTANCE_ID/g" /etc/hosts
 sudo sed -i "s/$EXISTING_HOSTNAME/$INSTANCE_ID/g" /etc/hostname
 
-# TODO: shell only arch selection
-if [ "${K3S_ARCH}" == "arm64" ]; 
+if [ "$(uname -m)" == "x86_64" ]; 
 then
-  curl "https://awscli.amazonaws.com/awscli-exe-linux-aarch64.zip" -o "/tmp/awscliv2.zip"
-else
   curl "https://awscli.amazonaws.com/awscli-exe-linux-x86_64.zip" -o "/tmp/awscliv2.zip"
+else
+  curl "https://awscli.amazonaws.com/awscli-exe-linux-aarch64.zip" -o "/tmp/awscliv2.zip"
 fi
 unzip /tmp/awscliv2.zip
 sudo ./aws/install
@@ -24,7 +26,6 @@ MASTER_INSTANCE=$(aws ec2 describe-instances --filters Name=tag-value,Values=k3s
 LOCAL_IP=$(curl -s http://169.254.169.254/latest/meta-data/local-ipv4)
 FLANNEL_IFACE=$(ip -4 route ls | grep default | grep -Po '(?<=dev )(\S+)')
 PROVIDER_ID="$(curl -s http://169.254.169.254/latest/meta-data/placement/availability-zone)/$(curl -s http://169.254.169.254/latest/meta-data/instance-id)"
-
 
 if [[ "$MASTER_INSTANCE" == "$INSTANCE_ID" ]]; then
     echo "Cluster init!"

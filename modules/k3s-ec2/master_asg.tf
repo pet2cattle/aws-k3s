@@ -10,8 +10,8 @@ resource "aws_autoscaling_group" "k3s_master_asg" {
 
   mixed_instances_policy {
     instances_distribution {
-      on_demand_base_capacity                  = 0
-      on_demand_percentage_above_base_capacity = 0
+      on_demand_base_capacity                  = var.k3s_master_on_demand_base_capacity
+      on_demand_percentage_above_base_capacity = var.k3s_master_on_demand_percentage_above_base_capacity
       spot_allocation_strategy                 = "lowest-price"
     }
 

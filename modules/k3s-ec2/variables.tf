@@ -62,6 +62,16 @@ variable "weighted_instance_types" {
   default     = { "m6g.medium" = 1 }
 }
 
+variable "k3s_master_on_demand_base_capacity" {
+  type    = number
+  default = 0
+}
+
+variable "k3s_master_on_demand_percentage_above_base_capacity" {
+  type    = number
+  default = 0
+}
+
 # TAGS
 
 variable "tags" {

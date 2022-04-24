@@ -12,8 +12,7 @@ data "template_cloudinit_config" "k3s_master" {
     content_type = "text/x-shellscript"
     content      = templatefile("${path.module}/userdata/install_master_k3s.sh",  { 
                                                                                     K3S_TOKEN = var.k3s_token, 
-                                                                                    K3S_CLUSTERNAME = var.k3s_cluster_name, 
-                                                                                    K3S_ARCH = var.arch 
+                                                                                    K3S_CLUSTERNAME = var.k3s_cluster_name
                                                                                   })
   }
 }
