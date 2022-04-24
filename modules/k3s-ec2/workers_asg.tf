@@ -1,5 +1,5 @@
-resource "aws_autoscaling_group" "k3s_master_asg" {
-  name                      = "k3s_master_asg"
+resource "aws_autoscaling_group" "k3s_workers_asg" {
+  name                      = "k3s_workers_asg"
   wait_for_capacity_timeout = "5m"
   vpc_zone_identifier       = var.subnet_ids
 
@@ -10,8 +10,8 @@ resource "aws_autoscaling_group" "k3s_master_asg" {
 
   mixed_instances_policy {
     instances_distribution {
-      on_demand_base_capacity                  = var.k3s_master_on_demand_base_capacity
-      on_demand_percentage_above_base_capacity = var.k3s_master_on_demand_percentage_above_base_capacity
+      on_demand_base_capacity                  = var.k3s_workers_on_demand_base_capacity
+      on_demand_percentage_above_base_capacity = var.k3s_workers_on_demand_percentage_above_base_capacity
       spot_allocation_strategy                 = "lowest-price"
     }
 
@@ -22,7 +22,7 @@ resource "aws_autoscaling_group" "k3s_master_asg" {
       }
 
       dynamic "override" {
-        for_each = var.k3s_master_weighted_instance_types
+        for_each = var.k3s_workers_weighted_instance_types
         content {
           instance_type     = override.key
           weighted_capacity = override.value
@@ -32,9 +32,9 @@ resource "aws_autoscaling_group" "k3s_master_asg" {
     }
   }
 
-  desired_capacity          = var.k3s_master_desired_capacity
-  min_size                  = var.k3s_master_min_capacity
-  max_size                  = var.k3s_master_max_capacity
+  desired_capacity          = var.k3s_workers_desired_capacity
+  min_size                  = var.k3s_workers_min_capacity
+  max_size                  = var.k3s_workers_max_capacity
   health_check_grace_period = 300
   health_check_type         = "EC2"
   force_delete              = true
@@ -59,7 +59,7 @@ resource "aws_autoscaling_group" "k3s_master_asg" {
 
   tag {
     key                 = "Name"
-    value               = "k3s-master"
+    value               = "k3s-worker"
     propagate_at_launch = true
   }
 }

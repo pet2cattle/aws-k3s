@@ -16,8 +16,14 @@ variable "arch" {
   }
 }
 
-variable "weighted_instance_types" {
+variable "k3s_master_weighted_instance_types" {
   description = "Master instance types"
+  type        = map(string)
+  default     = { "m6g.medium" = 1 }
+}
+
+variable "k3s_workers_weighted_instance_types" {
+  description = "Worker instance types"
   type        = map(string)
   default     = { "m6g.medium" = 1 }
 }

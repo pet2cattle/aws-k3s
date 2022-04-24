@@ -31,9 +31,10 @@ module "k3s-ec2" {
   k3s_token = var.k3s_token
   k3s_cluster_name = var.k3s_cluster_name
 
-  # arch related
+  # instance related
   arch = var.arch
-  weighted_instance_types = var.weighted_instance_types
+  k3s_master_weighted_instance_types = var.k3s_master_weighted_instance_types
+  k3s_workers_weighted_instance_types = var.k3s_workers_weighted_instance_types
   ami_id = var.ami_id
 
   tags = var.tags

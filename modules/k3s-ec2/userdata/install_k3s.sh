@@ -12,20 +12,12 @@ hostname $INSTANCE_ID
 sudo sed -i "s/$EXISTING_HOSTNAME/$INSTANCE_ID/g" /etc/hosts
 sudo sed -i "s/$EXISTING_HOSTNAME/$INSTANCE_ID/g" /etc/hostname
 
-if [ "$(uname -m)" == "x86_64" ]; 
-then
-  curl "https://awscli.amazonaws.com/awscli-exe-linux-x86_64.zip" -o "/tmp/awscliv2.zip"
-else
-  curl "https://awscli.amazonaws.com/awscli-exe-linux-aarch64.zip" -o "/tmp/awscliv2.zip"
-fi
-unzip /tmp/awscliv2.zip
-sudo ./aws/install
-rm -rf aws /tmp/awscliv2.zip
-
-MASTER_INSTANCE=$(aws ec2 describe-instances --filters Name=tag-value,Values=k3s-server Name=instance-state-name,Values=running --query 'sort_by(Reservations[].Instances[], &LaunchTime)[:-1].[InstanceId]' --output text | head -n1)
+MASTER_INSTANCE=$(aws ec2 describe-instances --filters Name=tag-value,Values=k3s-master Name=instance-state-name,Values=running --query 'sort_by(Reservations[].Instances[], &LaunchTime)[:-1].[InstanceId]' --output text | head -n1)
 LOCAL_IP=$(curl -s http://169.254.169.254/latest/meta-data/local-ipv4)
 FLANNEL_IFACE=$(ip -4 route ls | grep default | grep -Po '(?<=dev )(\S+)')
 PROVIDER_ID="$(curl -s http://169.254.169.254/latest/meta-data/placement/availability-zone)/$(curl -s http://169.254.169.254/latest/meta-data/instance-id)"
+
+# TODO: handle S3 backup/restore?
 
 if [[ "$MASTER_INSTANCE" == "$INSTANCE_ID" ]]; then
     echo "Cluster init!"
