@@ -11,7 +11,7 @@ resource "aws_security_group" "remote_acces_sg" {
     cidr_blocks = ["0.0.0.0/0"]
   }
 
-  # allow SSH from everywhere
+  # TODO: restrict access
   ingress {
     from_port   = 22
     to_port     = 22
@@ -35,6 +35,8 @@ resource "aws_security_group" "remote_acces_sg" {
     cidr_blocks = ["0.0.0.0/0"]
   }
 
+  # TODO: explictly allow ALB SG
+
   # k8s API
   ingress {
     from_port   = 6443
@@ -52,6 +54,6 @@ resource "aws_security_group" "remote_acces_sg" {
   }
 
   tags = merge(var.tags, {
-    Name        = "egress-only"
+    Name        = "k3s-servers"
   })
 }
