@@ -1,8 +1,9 @@
-resource "aws_security_group" "egress_only" {
+resource "aws_security_group" "remote_acces_sg" {
   vpc_id      = var.vpc_id
-  name        = "egress only"
-  description = "allow egress any / everything from itself"
+  name        = "GP SG for k3s"
+  description = "general purpose security group for k3s"
 
+  # outbound: any -> any
   egress {
     from_port   = 0
     to_port     = 0
@@ -18,6 +19,31 @@ resource "aws_security_group" "egress_only" {
     cidr_blocks = ["0.0.0.0/0"]
   }
 
+  # HTTP
+  ingress {
+    from_port   = 80
+    to_port     = 80
+    protocol    = "tcp"
+    cidr_blocks = ["0.0.0.0/0"]
+  }
+
+  # HTTPS
+  ingress {
+    from_port   = 443
+    to_port     = 443
+    protocol    = "tcp"
+    cidr_blocks = ["0.0.0.0/0"]
+  }
+
+  # k8s API
+  ingress {
+    from_port   = 6443
+    to_port     = 6443
+    protocol    = "tcp"
+    cidr_blocks = ["0.0.0.0/0"]
+  }
+
+  # itself
   ingress {
     protocol  = "-1"
     self      = true

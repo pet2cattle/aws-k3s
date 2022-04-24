@@ -22,10 +22,10 @@ resource "aws_autoscaling_group" "k3s_master_asg" {
       }
 
       dynamic "override" {
-        for_each = var.master_instance_types
+        for_each = var.weighted_instance_types
         content {
-          instance_type     = override.value
-          weighted_capacity = "1"
+          instance_type     = override.key
+          weighted_capacity = override.value
         }
       }
 
@@ -38,6 +38,12 @@ resource "aws_autoscaling_group" "k3s_master_asg" {
   health_check_grace_period = 300
   health_check_type         = "EC2"
   force_delete              = true
+
+  tag {
+    key                 = "k3s_cluster_name"
+    value               = var.k3s_cluster_name
+    propagate_at_launch = true
+  }
 
   tag {
     key                 = "environment"

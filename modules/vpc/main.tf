@@ -9,11 +9,35 @@ resource "aws_vpc" "server_vpc" {
 resource "aws_subnet" "vpc_subnets" {
   for_each          = toset(var.az_subnets)
 
-  cidr_block        = cidrsubnet(var.main_vpc_cidr_block, 8, index(var.az_subnets, each.value))
+  cidr_block        = cidrsubnet(var.main_vpc_cidr_block, 2, index(var.az_subnets, each.value))
   vpc_id            = aws_vpc.server_vpc.id
   availability_zone = each.value
 
+  map_public_ip_on_launch = true
+
   tags = var.tags
+}
+
+resource "aws_internet_gateway" "inet_gw" {
+  vpc_id = aws_vpc.server_vpc.id
+
+  tags = var.tags
+}
+
+resource "aws_route_table" "route_table_servers" {
+  vpc_id = aws_vpc.server_vpc.id
+
+  route {
+    cidr_block = "0.0.0.0/0"
+    gateway_id = aws_internet_gateway.inet_gw.id
+  }
+
+  tags = var.tags
+}
+
+resource "aws_main_route_table_association" "vpc_route_servers" {
+  vpc_id         = aws_vpc.server_vpc.id
+  route_table_id = aws_route_table.route_table_servers.id
 }
 
 output "vpc_id" {

@@ -19,6 +19,26 @@ variable "k3s_token" {
   type = string
 }
 
+variable "k3s_cluster_name" {
+  type = string
+}
+
+variable "arch" {
+  type    = string
+  default = "arm64"
+
+  validation {
+    condition     = contains(["arm64", "x86_64"], var.arch)
+    error_message = "Invalid architecture: {{ var.arch }} Valid values are: arm64, x86_64."
+  }
+
+}
+
+variable "ami_id" {
+  type = string
+  default = ""
+}
+
 # master ASG 
 
 variable "k3s_master_desired_capacity" {
@@ -36,15 +56,10 @@ variable "k3s_master_min_capacity" {
   type    = number
 }
 
-variable "master_default_instance_type" {
-  default = "m6g.medium"
-  type    = string
-}
-
-variable "master_instance_types" {
+variable "weighted_instance_types" {
   description = "Master instance types"
   type        = map(string)
-  default     = { master_type1 = "m6g.medium" }
+  default     = { "m6g.medium" = 1 }
 }
 
 # TAGS
