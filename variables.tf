@@ -51,6 +51,11 @@ variable "k3s_workers_weighted_instance_types" {
 }
 
 variable "k3s_workers_desired_capacity" {
-  default = 0
+  default = 1
+  type    = number
+}
+
+variable "k3s_workers_min_capacity" {
+  default = 1
   type    = number
 }

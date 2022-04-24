@@ -25,3 +25,14 @@ resource "aws_iam_role" "aws_ec2_custom_role" {
 
   tags = var.tags
 }
+
+# admin policy
+
+data "aws_iam_policy" "AdministratorAccess" {
+  arn = "arn:aws:iam::aws:policy/AdministratorAccess"
+}
+
+resource "aws_iam_role_policy_attachment" "k3s-admin-policy-attach" {
+  role       = aws_iam_role.aws_ec2_custom_role.name
+  policy_arn = data.aws_iam_policy.AdministratorAccess.arn
+}

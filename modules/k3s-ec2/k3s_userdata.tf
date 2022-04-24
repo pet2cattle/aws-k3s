@@ -13,6 +13,7 @@ data "template_cloudinit_config" "k3s_ud" {
     content      = templatefile("${path.module}/userdata/install_k3s.sh",  { 
                                                                                     K3S_TOKEN = var.k3s_token, 
                                                                                     K3S_CLUSTERNAME = var.k3s_cluster_name
+                                                                                    REGION = var.region
                                                                                   })
   }
 }
