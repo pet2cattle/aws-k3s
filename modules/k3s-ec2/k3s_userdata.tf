@@ -14,6 +14,7 @@ data "template_cloudinit_config" "k3s_ud" {
                                                                                     K3S_TOKEN = var.k3s_token, 
                                                                                     K3S_CLUSTERNAME = var.k3s_cluster_name
                                                                                     REGION = var.region
+                                                                                    K3S_LB = aws_lb.k3s_lb.dns_name
                                                                                   })
   }
 }

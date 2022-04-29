@@ -29,14 +29,14 @@ if [[ "$MASTER_INSTANCE" == "$INSTANCE_ID" ]]; then
 
   # TODO: check whether there is a S3 backup?
   echo "Cluster init!"
-  curl -sfL https://get.k3s.io | K3S_TOKEN=${K3S_TOKEN} sh -s - --cluster-init --node-ip $LOCAL_IP --advertise-address $LOCAL_IP --flannel-iface $FLANNEL_IFACE --kubelet-arg="provider-id=aws:///$PROVIDER_ID"
+  curl -sfL https://get.k3s.io | K3S_TOKEN=${K3S_TOKEN} sh -s - \
+                                  --cluster-init \
+                                  --node-ip $LOCAL_IP \
+                                  --advertise-address $LOCAL_IP \
+                                  --flannel-iface $FLANNEL_IFACE \
+                                  --kubelet-arg="cloud-provider=external" \
+                                  --kubelet-arg="provider-id=aws:///$PROVIDER_ID"
 else
   echo "Join cluster"
-  curl -sfL https://get.k3s.io | K3S_TOKEN=${K3S_TOKEN} sh -s - --server https://${K3S_CLUSTERNAME}:6443 --node-ip $LOCAL_IP --advertise-address $LOCAL_IP --flannel-iface $FLANNEL_IFACE --kubelet-arg="provider-id=aws:///$PROVIDER_ID"
+  curl -sfL https://get.k3s.io | K3S_TOKEN=${K3S_TOKEN} sh -s - --server https://${K3S_LB}:6443 --node-ip $LOCAL_IP --advertise-address $LOCAL_IP --flannel-iface $FLANNEL_IFACE --kubelet-arg="provider-id=aws:///$PROVIDER_ID"
 fi
-
-until kubectl get pods -A | grep 'Running'; 
-do
-  echo 'Waiting for k3s startup'
-  sleep 5
-done

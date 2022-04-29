@@ -3,9 +3,15 @@ resource "aws_autoscaling_group" "k3s_master_asg" {
   wait_for_capacity_timeout = "5m"
   vpc_zone_identifier       = var.subnet_ids
 
+  target_group_arns = [
+    aws_lb_target_group.k3s_master_http_tg.arn,
+    aws_lb_target_group.k3s_master_https_tg.arn,
+    aws_lb_target_group.k3s_master_k3s_tg.arn,
+  ]
+
   lifecycle {
     create_before_destroy = true
-    ignore_changes        = [load_balancers, target_group_arns]
+    ignore_changes        = [load_balancers]
   }
 
   mixed_instances_policy {
