@@ -39,6 +39,23 @@ variable "ami_id" {
   default = ""
 }
 
+# iam
+
+variable "instance_profile_name" {
+  type = string
+}
+
+# s3 bucket
+
+variable "s3_bucket_name" {
+  type = string
+}
+
+variable "s3_backup_prefix" {
+  type = string
+  default = "k3s/backups"
+}
+
 # master ASG 
 
 variable "k3s_master_desired_capacity" {

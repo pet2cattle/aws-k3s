@@ -1,12 +1,16 @@
 resource "aws_iam_instance_profile" "ec2_instance_profile" {
-  name = "k3s-ec2-instance-profile"
+  name = "k3s-${var.k3s_cluster_name}-instance-profile"
   role = aws_iam_role.aws_ec2_custom_role.name
 
   tags = var.tags
 }
 
+output "instance_profile_name" {
+  value = aws_iam_instance_profile.ec2_instance_profile.name
+}
+
 resource "aws_iam_role" "aws_ec2_custom_role" {
-  name = "k3s-role"
+  name = "k3s-${var.k3s_cluster_name}-role"
   path = "/k3s/"
 
   assume_role_policy = jsonencode({
@@ -24,6 +28,10 @@ resource "aws_iam_role" "aws_ec2_custom_role" {
   })
 
   tags = var.tags
+}
+
+output "iam_role_arn" {
+  value = aws_iam_role.aws_ec2_custom_role.arn
 }
 
 # admin policy
