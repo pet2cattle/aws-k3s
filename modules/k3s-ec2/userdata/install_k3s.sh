@@ -67,6 +67,8 @@ then
       # no backups available, install k3s
       echo "Cluster init!"
       curl -sfL https://get.k3s.io | INSTALL_K3S_EXEC="server" sh -s - --cluster-init $BASE_OPTS
+
+      # TODO: initial backup?
     else
       # backups available, restore k3s
       echo "Restore from backup! - not implemented"
