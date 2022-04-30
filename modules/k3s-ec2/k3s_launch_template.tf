@@ -8,11 +8,12 @@ resource "aws_launch_template" "k3s_lt" {
   }
 
   block_device_mappings {
-    device_name = "/dev/sda1"
+    device_name = "/dev/nvme0n1"
 
     ebs {
-      volume_size = 20
+      volume_size = 15
       encrypted   = true
+      delete_on_termination = true
     }
   }
 

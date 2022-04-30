@@ -46,6 +46,12 @@ resource "aws_autoscaling_group" "k3s_workers_asg" {
   }
 
   tag {
+    key                 = "k3s_role"
+    value               = "worker"
+    propagate_at_launch = true
+  }
+
+  tag {
     key                 = "environment"
     value               = var.tags["environment"]
     propagate_at_launch = true
