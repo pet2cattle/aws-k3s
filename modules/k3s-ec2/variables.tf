@@ -23,17 +23,6 @@ variable "k3s_cluster_name" {
   type = string
 }
 
-variable "arch" {
-  type    = string
-  default = "arm64"
-
-  validation {
-    condition     = contains(["arm64", "x86_64"], var.arch)
-    error_message = "Invalid architecture: {{ var.arch }} Valid values are: arm64, x86_64."
-  }
-
-}
-
 variable "ami_id" {
   type = string
   default = ""

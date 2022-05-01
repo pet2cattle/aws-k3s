@@ -20,16 +20,6 @@ variable "k3s_token" {
 
 # instances
 
-variable "arch" {
-  type    = string
-  default = "arm64"
-
-  validation {
-    condition     = contains(["arm64", "x86_64"], var.arch)
-    error_message = "Invalid architecture: {{ var.arch }}."
-  }
-}
-
 variable "ami_id" {
   type = string
   default = ""

@@ -1,5 +1,3 @@
-# TODO: fix arch support
-
 data "aws_ami" "amazon2" {
   most_recent = true
 
