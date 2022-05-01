@@ -70,6 +70,12 @@ resource "aws_autoscaling_group" "k3s_master_asg" {
   }
 
   tag {
+    key                 = "kubernetes.io/cluster/default"
+    value               = "owned"
+    propagate_at_launch = true
+  }
+
+  tag {
     key                 = "Name"
     value               = "k3s-master"
     propagate_at_launch = true

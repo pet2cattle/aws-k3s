@@ -119,14 +119,39 @@ then
 
     fi
 
-    # add cronjob to backup etcd
-    (crontab -l 2>/dev/null; echo "0 0 * * * k3s etcd-snapshot --s3 --s3-bucket=${K3S_BUCKET} --etcd-s3-folder=${K3S_BACKUP_PREFIX} --etcd-s3-region=${REGION}"; ) | crontab -
-    (crontab -l 2>/dev/null; echo "15 0 * * * k3s etcd-snapshot prune --s3 --s3-bucket=${K3S_BUCKET} --etcd-s3-folder=${K3S_BACKUP_PREFIX} --etcd-s3-region=${REGION}"; ) | crontab -
   else
     # secondary master node alive
-    echo "Intallint secondary master node"
+    echo "Intalling secondary master node"
     seconary_join
   fi
+
+  #
+  # post install master
+  #
+
+  # add cronjob to backup etcd
+  (crontab -l 2>/dev/null; echo "0 0 * * * k3s etcd-snapshot --s3 --s3-bucket=${K3S_BUCKET} --etcd-s3-folder=${K3S_BACKUP_PREFIX} --etcd-s3-region=${REGION}"; ) | crontab -
+  (crontab -l 2>/dev/null; echo "15 0 * * * k3s etcd-snapshot prune --s3 --s3-bucket=${K3S_BUCKET} --etcd-s3-folder=${K3S_BACKUP_PREFIX} --etcd-s3-region=${REGION}"; ) | crontab -
+
+  # cloud provider install
+
+  # https://kubernetes.github.io/cloud-provider-aws/index.yaml
+  cat <<"EOF" > /var/lib/rancher/k3s/server/manifests/aws-ccm.yaml
+apiVersion: helm.cattle.io/v1
+kind: HelmChart
+metadata:
+  name: aws-cloud-controller-manager
+  namespace: kube-system
+spec:
+  chart: https://github.com/kubernetes/cloud-provider-aws/releases/download/helm-chart-aws-cloud-controller-manager-0.0.6/aws-cloud-controller-manager-0.0.6.tgz
+  targetNamespace: kube-system
+  bootstrap: true
+  valuesContent: |-
+    hostNetworking: true
+    nodeSelector:
+      node-role.kubernetes.io/master: "true"
+EOF
+
 else
   echo "worker node"
   seconary_join
