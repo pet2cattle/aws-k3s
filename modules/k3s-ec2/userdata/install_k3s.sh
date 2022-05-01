@@ -23,8 +23,6 @@ FLANNEL_IFACE=$(ip -4 route ls | grep default | grep -Po '(?<=dev )(\S+)')
 PROVIDER_ID="$(curl -s http://169.254.169.254/latest/meta-data/placement/availability-zone)/$(curl -s http://169.254.169.254/latest/meta-data/instance-id)"
 K3S_ROLE=$(aws ec2 describe-tags --filters "Name=resource-id,Values=$(hostname)" --output=text | grep k3s_role | awk '{ print $NF }' | head -n1)
 
-# TODO: handle S3 backup/restore?
-
 BASE_OPTS=$(echo  "" \
                   " --token ${K3S_TOKEN}" \
                   " --disable-cloud-controller" \
@@ -42,6 +40,8 @@ BASE_OPTS=$(echo  "" \
                   " --etcd-s3-region ${REGION}" \
                   ""
             )
+
+export BASE_OPTS="$BASE_OPTS"
 
 BACKUPS_AVAILABLE=$(aws s3 ls s3://${K3S_BUCKET}/${K3S_BACKUP_PREFIX}/ | wc -l)
 
@@ -102,15 +102,26 @@ then
       fi
 
       echo "Restore backup $RESTORE_BACKUP"
-      rm -f /tmp/k3s-restore-backup
-      aws s3 cp s3://${K3S_BUCKET}/${K3S_BACKUP_PREFIX}/$RESTORE_BACKUP /tmp/k3s-restore-backup
+      curl -sfL https://get.k3s.io | INSTALL_K3S_EXEC="server" sh -s -  $BASE_OPTS \
+                                                                        --cluster-reset \
+                                                                        --cluster-reset-restore-path="$RESTORE_BACKUP"
 
-      curl -sfL https://get.k3s.io | INSTALL_K3S_EXEC="server" sh -s - $BASE_OPTS --cluster-reset --cluster-reset-restore-path=/tmp/k3s-restore-backup
+      # wait restore process to finish
+      until journalctl -xe | grep "restart without --cluster-reset";
+      do
+        sleep 5;
+      done
+      
+      sed -e '/--cluster-reset/d' -i /etc/systemd/system/k3s.service
+
+      systemctl daemon-reload
+      systemctl restart k3s
+
     fi
 
     # add cronjob to backup etcd
-    crontab -l | { cat; echo "0 0 * * * k3s etcd-snapshot --s3 --s3-bucket=${K3S_BUCKET} --etcd-s3-folder=${K3S_BACKUP_PREFIX} --etcd-s3-region=${REGION}"; } | crontab -
-    crontab -l | { cat; echo "15 0 * * * k3s etcd-snapshot prune --s3 --s3-bucket=${K3S_BUCKET} --etcd-s3-folder=${K3S_BACKUP_PREFIX} --etcd-s3-region=${REGION}"; } | crontab -
+    (crontab -l 2>/dev/null; echo "0 0 * * * k3s etcd-snapshot --s3 --s3-bucket=${K3S_BUCKET} --etcd-s3-folder=${K3S_BACKUP_PREFIX} --etcd-s3-region=${REGION}"; ) | crontab -
+    (crontab -l 2>/dev/null; echo "15 0 * * * k3s etcd-snapshot prune --s3 --s3-bucket=${K3S_BUCKET} --etcd-s3-folder=${K3S_BACKUP_PREFIX} --etcd-s3-region=${REGION}"; ) | crontab -
   else
     # secondary master node alive
     echo "Intallint secondary master node"
