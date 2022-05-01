@@ -28,6 +28,7 @@ BASE_OPTS=$(echo  "" \
                   " --disable-cloud-controller" \
                   " --disable servicelb" \
                   " --disable traefik" \
+                  " --disable metrics-server" \
                   " --node-ip $LOCAL_IP" \
                   " --advertise-address $LOCAL_IP" \
                   " --flannel-iface $FLANNEL_IFACE" \
