@@ -43,7 +43,7 @@ BASE_OPTS=$(echo  "" \
                   ""
             )
 
-BACKUPS_AVAILABLE=$(aws s3 ls s3://${K3S_BUCKET}/${K3S_BACKUP_PREFIX} | wc -l)
+BACKUPS_AVAILABLE=$(aws s3 ls s3://${K3S_BUCKET}/${K3S_BACKUP_PREFIX}/ | wc -l)
 
 seconary_join() {
   for PRIMARY_NODE in $CLUSTER_INSTANCES;
@@ -54,6 +54,7 @@ seconary_join() {
       echo "Install k3s on $PRIMARY_NODE succeeded"
       exit 0
     fi
+  done
 }
 
 if [ "$K3S_ROLE" == "master" ];
@@ -65,17 +66,54 @@ then
     if [ $BACKUPS_AVAILABLE -eq 0 ];
     then
       # no backups available, install k3s
-      echo "Cluster init!"
+      echo "Cluster init"
       curl -sfL https://get.k3s.io | INSTALL_K3S_EXEC="server" sh -s - --cluster-init $BASE_OPTS
 
-      # TODO: initial backup?
+      # wait for k3s to be ready
+      until kubectl get pods -A | grep Running > /dev/null; 
+      do 
+        sleep 5; 
+      done
+
+      # initial backup
+      k3s etcd-snapshot --s3 --s3-bucket=${K3S_BUCKET} --etcd-s3-folder=${K3S_BACKUP_PREFIX} --etcd-s3-region=${REGION}
+
     else
       # backups available, restore k3s
-      echo "Restore from backup! - not implemented"
+      echo "Restore from backup"
+
+      RESTORE_BACKUP=""
+      RESTORE_TS="0"
+      for BACKUP in $(aws s3 ls s3://${K3S_BUCKET}/${K3S_BACKUP_PREFIX}/ | awk '{ print $NF }');
+      do
+        TIMESTAMP=$(echo $BACKUP | rev | cut -d'-' -f1 | rev)
+        
+        if [ $TIMESTAMP -gt $RESTORE_TS ];
+        then
+          RESTORE_BACKUP=$BACKUP
+          RESTORE_TS=$TIMESTAMP
+        fi
+      done
+
+      if [ $RESTORE_TS -eq 0 ];
+      then
+        echo "No backups available"
+        exit 1
+      fi
+
+      echo "Restore backup $RESTORE_BACKUP"
+      rm -f /tmp/k3s-restore-backup
+      aws s3 cp s3://${K3S_BUCKET}/${K3S_BACKUP_PREFIX}/$RESTORE_BACKUP /tmp/k3s-restore-backup
+
+      curl -sfL https://get.k3s.io | INSTALL_K3S_EXEC="server" sh -s - $BASE_OPTS --cluster-reset --cluster-reset-restore-path=/tmp/k3s-restore-backup
     fi
+
+    # add cronjob to backup etcd
+    crontab -l | { cat; echo "0 0 * * * k3s etcd-snapshot --s3 --s3-bucket=${K3S_BUCKET} --etcd-s3-folder=${K3S_BACKUP_PREFIX} --etcd-s3-region=${REGION}"; } | crontab -
+    crontab -l | { cat; echo "15 0 * * * k3s etcd-snapshot prune --s3 --s3-bucket=${K3S_BUCKET} --etcd-s3-folder=${K3S_BACKUP_PREFIX} --etcd-s3-region=${REGION}"; } | crontab -
   else
     # secondary master node alive
-    echo "Secondary master node alive!"
+    echo "Intallint secondary master node"
     seconary_join
   fi
 else
