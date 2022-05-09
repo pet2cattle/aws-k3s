@@ -52,14 +52,14 @@ module "k3s-ec2" {
   k3s_token = var.k3s_token
   k3s_cluster_name = var.k3s_cluster_name
 
-  # instance related
+  # master
   ami_id = var.ami_id
-
   k3s_master_weighted_instance_types = var.k3s_master_weighted_instance_types
-  k3s_workers_weighted_instance_types = var.k3s_workers_weighted_instance_types
-  
-  k3s_workers_desired_capacity = var.k3s_workers_desired_capacity
-  k3s_workers_min_capacity = var.k3s_workers_min_capacity
+
+  k3s_master_instances = var.k3s_master_instances
+
+  # workers
+  k3s_worker_instances = var.k3s_worker_instances
 
   s3_bucket_name = module.s3.s3_bucket_name
 
