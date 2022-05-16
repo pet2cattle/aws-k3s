@@ -45,6 +45,13 @@ variable "s3_backup_prefix" {
   default = "k3s/backups"
 }
 
+# net
+
+variable "main_vpc_cidr_block" {
+  type = string
+  default = "10.12.0.0/16"
+}
+
 # master ASG 
 
 variable "k3s_master_desired_capacity" {

@@ -2,6 +2,9 @@
 
 set -x
 
+# ALB controller - Kustomize dependency
+yum install git -y
+
 INSTANCE_ID=$(curl -s http://169.254.169.254/latest/meta-data/instance-id)
 EXISTING_HOSTNAME=$(cat /etc/hostname)
 
@@ -70,14 +73,11 @@ then
       echo "Cluster init"
       curl -sfL https://get.k3s.io | INSTALL_K3S_EXEC="server" sh -s - --cluster-init $BASE_OPTS
 
-      # wait for k3s to be ready
-      until kubectl get pods -A | grep Running > /dev/null; 
+      # wait for k3s to be Pending (aws-cloud-controller is needed to get to Running state)
+      until kubectl get pods -A | grep Pending > /dev/null; 
       do 
         sleep 5; 
       done
-
-      # initial backup
-      k3s etcd-snapshot --s3 --s3-bucket=${K3S_BUCKET} --etcd-s3-folder=${K3S_BACKUP_PREFIX} --etcd-s3-region=${REGION}
 
     else
       # backups available, restore k3s
@@ -107,8 +107,13 @@ then
                                                                         --cluster-reset \
                                                                         --cluster-reset-restore-path="$RESTORE_BACKUP"
 
+      # give it some time
+      sleep 1m
+
+      journalctl -xe
+
       # wait restore process to finish
-      until journalctl -xe | grep "restart without --cluster-reset";
+      until journalctl -xe | grep "Managed etcd cluster membership has been reset";
       do
         sleep 5;
       done
@@ -116,7 +121,6 @@ then
       sed -e '/--cluster-reset/d' -i /etc/systemd/system/k3s.service
 
       systemctl daemon-reload
-      systemctl restart k3s
 
     fi
 
@@ -134,7 +138,9 @@ then
   (crontab -l 2>/dev/null; echo "0 0 * * * k3s etcd-snapshot --s3 --s3-bucket=${K3S_BUCKET} --etcd-s3-folder=${K3S_BACKUP_PREFIX} --etcd-s3-region=${REGION}"; ) | crontab -
   (crontab -l 2>/dev/null; echo "15 0 * * * k3s etcd-snapshot prune --s3 --s3-bucket=${K3S_BUCKET} --etcd-s3-folder=${K3S_BACKUP_PREFIX} --etcd-s3-region=${REGION}"; ) | crontab -
 
-  # cloud provider install
+  # basic helm charts
+
+  mkdir -p /var/lib/rancher/k3s/server/manifests/
 
   # https://kubernetes.github.io/cloud-provider-aws/index.yaml
   cat <<"EOF" > /var/lib/rancher/k3s/server/manifests/aws-ccm.yaml
@@ -148,12 +154,69 @@ spec:
   targetNamespace: kube-system
   bootstrap: true
   valuesContent: |-
+    args:
+      - --v=2
+      - --cloud-provider=aws
+      - --cluster-cidr=${MAIN_VPC_CIDR_BLOCK}
     hostNetworking: true
     nodeSelector:
       node-role.kubernetes.io/master: "true"
 EOF
 
+  cat <<"EOF" > /var/lib/rancher/k3s/server/manifests/ebs-csi.yaml
+apiVersion: helm.cattle.io/v1
+kind: HelmChart
+metadata:
+  name: ebs-csi
+  namespace: kube-system
+spec:
+  chart: https://github.com/kubernetes-sigs/aws-ebs-csi-driver/releases/download/helm-chart-aws-ebs-csi-driver-2.6.7/aws-ebs-csi-driver-2.6.7.tgz
+  targetNamespace: kube-system
+  bootstrap: true
+  valuesContent: |-
+    storageClasses:
+    - name: ebs-gp2
+      # annotation metadata
+      annotations:
+        storageclass.kubernetes.io/is-default-class: "true"
+      volumeBindingMode: WaitForFirstConsumer
+      reclaimPolicy: Retain
+      parameters:
+        encrypted: "true"
+        type: gp2
+EOF
+
+  # TargetGroupBinding
+  kubectl apply -k "github.com/aws/eks-charts/stable/aws-load-balancer-controller/crds?ref=master"
+
+  # aws-load-balancer-controller
+  cat <<"EOF" > /var/lib/rancher/k3s/server/manifests/alb-controller.yaml
+apiVersion: helm.cattle.io/v1
+kind: HelmChart
+metadata:
+  name: alb-controller
+  namespace: kube-system
+spec:
+  chart: https://aws.github.io/eks-charts/aws-load-balancer-controller-1.4.1.tgz
+  targetNamespace: kube-system
+  bootstrap: true
+  valuesContent: |-
+    clusterName: default
+    image:
+      repository: 602401143452.dkr.ecr.us-west-2.amazonaws.com/amazon/aws-load-balancer-controller
+    replicaCount: 1
+EOF
+
+  # initial backup
+  k3s etcd-snapshot --s3 --s3-bucket=${K3S_BUCKET} --etcd-s3-folder=${K3S_BACKUP_PREFIX} --etcd-s3-region=${REGION}
+
 else
   echo "worker node"
   seconary_join
 fi
+
+# make sure local-path is not the default SC
+kubectl patch storageclass local-path -p '{"metadata": {"annotations":{"storageclass.kubernetes.io/is-default-class":"false"}}}'
+
+# configuring kube-system as the default namespace
+kubectl config set-context --current --namespace kube-system

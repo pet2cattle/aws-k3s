@@ -15,7 +15,11 @@ resource "aws_subnet" "vpc_subnets" {
 
   map_public_ip_on_launch = true
 
-  tags = var.tags
+  tags = merge(var.tags,
+              {
+                "kubernetes.io/cluster/default" = "shared"
+              }
+              )
 }
 
 resource "aws_internet_gateway" "inet_gw" {
@@ -46,4 +50,8 @@ output "vpc_id" {
  
 output "subnet_ids" {
   value = [ for each in aws_subnet.vpc_subnets : each.id ]
+}
+
+output "main_vpc_cidr_block" {
+  value = var.main_vpc_cidr_block  
 }
