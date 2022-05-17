@@ -5,15 +5,6 @@ set -x
 # ALB controller - Kustomize dependency
 yum install git nc jq -y
 
-# INSTANCE_ID=$(curl -s http://169.254.169.254/latest/meta-data/instance-id)
-# EXISTING_HOSTNAME=$(cat /etc/hostname)
-
-# hostnamectl set-hostname $INSTANCE_ID
-# hostname $INSTANCE_ID
-
-# sudo sed -i "s/$EXISTING_HOSTNAME/$INSTANCE_ID/g" /etc/hosts
-# sudo sed -i "s/$EXISTING_HOSTNAME/$INSTANCE_ID/g" /etc/hostname
-
 # aws cli config
 mkdir -p ~/.aws
 echo "[default]" > ~/.aws/config
@@ -191,6 +182,7 @@ then
   mkdir -p /var/lib/rancher/k3s/server/manifests/
 
   # https://kubernetes.github.io/cloud-provider-aws/index.yaml
+  : aws-cloud-provider
   cat <<"EOF" > /var/lib/rancher/k3s/server/manifests/aws-cloud-provider.yaml
 apiVersion: helm.cattle.io/v1
 kind: HelmChart
@@ -211,6 +203,7 @@ spec:
       node-role.kubernetes.io/master: "true"
 EOF
  
+  : ebs-csi
   cat <<"EOF" > /var/lib/rancher/k3s/server/manifests/ebs-csi.yaml
 apiVersion: helm.cattle.io/v1
 kind: HelmChart
@@ -234,10 +227,10 @@ spec:
         type: gp2
 EOF
 
-  # TargetGroupBinding
+  : TargetGroupBinding
   kubectl apply -k "github.com/aws/eks-charts/stable/aws-load-balancer-controller/crds?ref=master"
 
-  # aws-load-balancer-controller
+  : aws-load-balancer-controller
   cat <<"EOF" > /var/lib/rancher/k3s/server/manifests/alb-controller.yaml
 apiVersion: helm.cattle.io/v1
 kind: HelmChart
@@ -257,7 +250,7 @@ spec:
       - name: ecr
 EOF
 
-  # aws-node-termination-handler
+  : aws-node-termination-handler
   cat <<"EOF" > /var/lib/rancher/k3s/server/manifests/termination-handler.yaml
 apiVersion: helm.cattle.io/v1
 kind: HelmChart
@@ -279,8 +272,8 @@ spec:
       node.lifecycle: spot
 EOF
 
-  # metrics server
-  cat <<"EOF" > /var/lib/rancher/k3s/server/manifests/metrics-server.yaml
+  : metrics server
+  cat <<"EOF" > /var/lib/rancher/k3s/server/manifests/metrics.yaml
 apiVersion: helm.cattle.io/v1
 kind: HelmChart
 metadata:
@@ -292,9 +285,11 @@ spec:
   bootstrap: true
   valuesContent: |-
     affinity:
-      podAntiAffinity:
-        preferredDuringSchedulingIgnoredDuringExecution:
-        - labelSelector:
+    podAntiAffinity:
+      preferredDuringSchedulingIgnoredDuringExecution:
+      - weight: 100
+        podAffinityTerm:
+          labelSelector:
             matchExpressions:
             - key: node.lifecycle
               operator: In
