@@ -35,16 +35,6 @@ resource "aws_security_group" "remote_acces_sg" {
     cidr_blocks = ["0.0.0.0/0"]
   }
 
-  # TODO: explictly allow ALB SG
-
-  # k8s API
-  ingress {
-    from_port   = 6443
-    to_port     = 6443
-    protocol    = "tcp"
-    cidr_blocks = ["0.0.0.0/0"]
-  }
-
   # itself
   ingress {
     protocol  = "-1"
