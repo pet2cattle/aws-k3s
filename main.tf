@@ -53,9 +53,6 @@ module "k3s-ec2" {
   k3s_cluster_name = var.k3s_cluster_name
 
   # master
-  ami_id = var.ami_id
-  k3s_master_weighted_instance_types = var.k3s_master_weighted_instance_types
-
   k3s_master_instances = var.k3s_master_instances
 
   # workers

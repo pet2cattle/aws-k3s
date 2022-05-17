@@ -44,3 +44,14 @@ resource "aws_iam_role_policy_attachment" "k3s-admin-policy-attach" {
   role       = aws_iam_role.aws_ec2_custom_role.name
   policy_arn = data.aws_iam_policy.AdministratorAccess.arn
 }
+
+# AmazonEC2ContainerRegistryReadOnly
+
+data "aws_iam_policy" "AmazonEC2ContainerRegistryReadOnly" {
+  arn = "arn:aws:iam::aws:policy/AmazonEC2ContainerRegistryReadOnly"
+}
+
+resource "aws_iam_role_policy_attachment" "k3s-AmazonEC2ContainerRegistryReadOnly-policy-attach" {
+  role       = aws_iam_role.aws_ec2_custom_role.name
+  policy_arn = data.aws_iam_policy.AmazonEC2ContainerRegistryReadOnly.arn
+}

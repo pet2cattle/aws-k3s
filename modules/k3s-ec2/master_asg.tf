@@ -1,5 +1,7 @@
 resource "aws_autoscaling_group" "k3s_master_asg" {
-  name                      = "k3s_master_asg"
+  for_each = var.k3s_master_instances
+
+  name                      = "k3s_master_asg_${each.key}"
   wait_for_capacity_timeout = "5m"
   vpc_zone_identifier       = var.subnet_ids
 
@@ -11,24 +13,24 @@ resource "aws_autoscaling_group" "k3s_master_asg" {
 
   lifecycle {
     create_before_destroy = true
-    ignore_changes        = [load_balancers, target_group_arns]
+    ignore_changes        = [load_balancers, target_group_arns, desired_capacity]
   }
 
   mixed_instances_policy {
     instances_distribution {
-      on_demand_base_capacity                  = var.k3s_master_on_demand_base_capacity
-      on_demand_percentage_above_base_capacity = var.k3s_master_on_demand_percentage_above_base_capacity
-      spot_allocation_strategy                 = "lowest-price"
+      on_demand_base_capacity                  = try(each.value.ondemand_base_capacity, 0)
+      on_demand_percentage_above_base_capacity = try(each.value.on_demand_percentage_above_base_capacity, 0)
+      spot_allocation_strategy                 = try(each.value.spot_allocation_strategy, "lowest-price")
     }
 
     launch_template {
       launch_template_specification {
-        launch_template_id = aws_launch_template.k3s_lt.id
+        launch_template_id = aws_launch_template.k3s_masters_lt[each.key].id
         version            = "$Latest"
       }
 
       dynamic "override" {
-        for_each = var.k3s_master_weighted_instance_types
+        for_each = each.value.weighted_instance_types
         content {
           instance_type     = override.key
           weighted_capacity = override.value
@@ -38,9 +40,10 @@ resource "aws_autoscaling_group" "k3s_master_asg" {
     }
   }
 
-  desired_capacity          = var.k3s_master_desired_capacity
-  min_size                  = var.k3s_master_min_capacity
-  max_size                  = var.k3s_master_max_capacity
+  min_size                  = try(each.value.min_capacity, 0)
+  desired_capacity          = try(each.value.desired_capacity, 0)
+  max_size                  = try(each.value.max_capacity, 0)
+
   health_check_grace_period = 300
   health_check_type         = "EC2"
   force_delete              = true
@@ -53,7 +56,7 @@ resource "aws_autoscaling_group" "k3s_master_asg" {
 
   tag {
     key                 = "k3s_role"
-    value               = "master"
+    value               = try(each.value.role, "master")
     propagate_at_launch = true
   }
 

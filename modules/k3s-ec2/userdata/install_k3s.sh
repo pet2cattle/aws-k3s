@@ -3,16 +3,16 @@
 set -x
 
 # ALB controller - Kustomize dependency
-yum install git -y
+yum install git nc jq -y
 
-INSTANCE_ID=$(curl -s http://169.254.169.254/latest/meta-data/instance-id)
-EXISTING_HOSTNAME=$(cat /etc/hostname)
+# INSTANCE_ID=$(curl -s http://169.254.169.254/latest/meta-data/instance-id)
+# EXISTING_HOSTNAME=$(cat /etc/hostname)
 
-hostnamectl set-hostname $INSTANCE_ID
-hostname $INSTANCE_ID
+# hostnamectl set-hostname $INSTANCE_ID
+# hostname $INSTANCE_ID
 
-sudo sed -i "s/$EXISTING_HOSTNAME/$INSTANCE_ID/g" /etc/hosts
-sudo sed -i "s/$EXISTING_HOSTNAME/$INSTANCE_ID/g" /etc/hostname
+# sudo sed -i "s/$EXISTING_HOSTNAME/$INSTANCE_ID/g" /etc/hosts
+# sudo sed -i "s/$EXISTING_HOSTNAME/$INSTANCE_ID/g" /etc/hostname
 
 # aws cli config
 mkdir -p ~/.aws
@@ -24,7 +24,8 @@ CLUSTER_INSTANCES_COUNT=$(echo "$CLUSTER_INSTANCES" | grep -v None | wc -l)
 LOCAL_IP=$(curl -s http://169.254.169.254/latest/meta-data/local-ipv4)
 FLANNEL_IFACE=$(ip -4 route ls | grep default | grep -Po '(?<=dev )(\S+)')
 PROVIDER_ID="$(curl -s http://169.254.169.254/latest/meta-data/placement/availability-zone)/$(curl -s http://169.254.169.254/latest/meta-data/instance-id)"
-K3S_ROLE=$(aws ec2 describe-tags --filters "Name=resource-id,Values=$(hostname)" --output=text | grep k3s_role | awk '{ print $NF }' | head -n1)
+K3S_ROLE=$(aws ec2 describe-tags --filters "Name=resource-id,Values=$(curl -s http://169.254.169.254/latest/meta-data/instance-id)" --output=text | grep k3s_role | awk '{ print $NF }' | head -n1)
+LIFECYCLE=$(aws ec2 describe-spot-instance-requests --filters Name=instance-id,Values="$(wget -q -O - http://169.254.169.254/latest/meta-data/instance-id)" --region ${REGION} | jq -r '.SpotInstanceRequests | if length > 0 then "spot" else "ondemand" end')
 
 BASE_OPTS=$(echo  "" \
                   " --token ${K3S_TOKEN}" \
@@ -42,6 +43,7 @@ BASE_OPTS=$(echo  "" \
                   " --etcd-s3-bucket ${K3S_BUCKET}" \
                   " --etcd-s3-folder ${K3S_BACKUP_PREFIX}" \
                   " --etcd-s3-region ${REGION}" \
+                  " --node-label node.lifecycle=$LIFECYCLE" \
                   ""
             )
 
@@ -49,13 +51,48 @@ export BASE_OPTS="$BASE_OPTS"
 
 BACKUPS_AVAILABLE=$(aws s3 ls s3://${K3S_BUCKET}/${K3S_BACKUP_PREFIX}/ | wc -l)
 
+kubectl_settings() {
+  # make sure local-path is not the default SC
+  kubectl patch storageclass local-path -p '{"metadata": {"annotations":{"storageclass.kubernetes.io/is-default-class":"false"}}}'
+
+  # configuring kube-system as the default namespace
+  kubectl config set-context --current --namespace kube-system
+}
+
 seconary_join() {
+  if [ $CLUSTER_INSTANCES_COUNT -ne 0 ];
+  then
+    until [ $CLUSTER_INSTANCES_COUNT -gt 0 ];
+    do
+      # wait for master instances to come up
+      sleep 5s
+
+      CLUSTER_INSTANCES=$(aws ec2 describe-instances --filters Name=tag:k3s_cluster_name,Values=${K3S_CLUSTERNAME} Name=tag:k3s_role,Values=master --query 'sort_by(Reservations[].Instances[], &LaunchTime)[*].[PrivateIpAddress]' --output text | grep -v None)
+      CLUSTER_INSTANCES_COUNT=$(echo "$CLUSTER_INSTANCES" | grep -v None | wc -l)
+    done
+  fi
+
   for PRIMARY_NODE in $CLUSTER_INSTANCES;
   do
+    while true;
+    do
+      nc -zv $PRIMARY_NODE 6443
+      if [ $? -eq 0 ];
+      then
+        break
+      else
+        echo "waiting for $PRIMARY_NODE 6443"
+        sleep 30s
+      fi
+    done
+
     curl -sfL https://get.k3s.io | INSTALL_K3S_EXEC="server" sh -s - --server https://$PRIMARY_NODE:6443 $BASE_OPTS
     if [ $? -eq 0 ]
     then
       echo "Install k3s on $PRIMARY_NODE succeeded"
+
+      kubectl_settings
+
       exit 0
     fi
   done
@@ -138,12 +175,23 @@ then
   (crontab -l 2>/dev/null; echo "0 0 * * * k3s etcd-snapshot --s3 --s3-bucket=${K3S_BUCKET} --etcd-s3-folder=${K3S_BACKUP_PREFIX} --etcd-s3-region=${REGION}"; ) | crontab -
   (crontab -l 2>/dev/null; echo "15 0 * * * k3s etcd-snapshot prune --s3 --s3-bucket=${K3S_BUCKET} --etcd-s3-folder=${K3S_BACKUP_PREFIX} --etcd-s3-region=${REGION}"; ) | crontab -
 
+  # upsert ECR secret
+  if [ "$(kubectl get secret ecr --no-headers 2>/dev/null | wc -l)" -ne 0 ];
+  then
+    kubeconfig delete secret ecr
+  fi
+  
+  kubectl create secret docker-registry ecr --docker-server 602401143452.dkr.ecr.us-west-2.amazonaws.com --docker-username=AWS --docker-password=$(aws ecr get-login-password) -n kube-system
+
+  # cron to update it
+  (crontab -l 2>/dev/null; echo "0 */11 * * * kubeconfig delete secret ecr; kubectl create secret docker-registry ecr --docker-server 602401143452.dkr.ecr.us-west-2.amazonaws.com --docker-username=AWS --docker-password=$(aws ecr get-login-password) -n kube-system"; ) | crontab -
+
   # basic helm charts
 
   mkdir -p /var/lib/rancher/k3s/server/manifests/
 
   # https://kubernetes.github.io/cloud-provider-aws/index.yaml
-  cat <<"EOF" > /var/lib/rancher/k3s/server/manifests/aws-ccm.yaml
+  cat <<"EOF" > /var/lib/rancher/k3s/server/manifests/aws-cloud-provider.yaml
 apiVersion: helm.cattle.io/v1
 kind: HelmChart
 metadata:
@@ -162,7 +210,7 @@ spec:
     nodeSelector:
       node-role.kubernetes.io/master: "true"
 EOF
-
+ 
   cat <<"EOF" > /var/lib/rancher/k3s/server/manifests/ebs-csi.yaml
 apiVersion: helm.cattle.io/v1
 kind: HelmChart
@@ -205,6 +253,54 @@ spec:
     image:
       repository: 602401143452.dkr.ecr.us-west-2.amazonaws.com/amazon/aws-load-balancer-controller
     replicaCount: 1
+    imagePullSecrets:
+      - name: ecr
+EOF
+
+  # aws-node-termination-handler
+  cat <<"EOF" > /var/lib/rancher/k3s/server/manifests/termination-handler.yaml
+apiVersion: helm.cattle.io/v1
+kind: HelmChart
+metadata:
+  name: termination-handler
+  namespace: kube-system
+spec:
+  chart: https://aws.github.io/eks-charts/aws-node-termination-handler-0.18.3.tgz
+  targetNamespace: kube-system
+  bootstrap: true
+  valuesContent: |-
+    enableRebalanceMonitoring: false
+    enableRebalanceDraining: false
+    enableScheduledEventDraining: ""
+    enableSpotInterruptionDraining: "true"
+    checkASGTagBeforeDraining: false
+    emitKubernetesEvents: true
+    nodeSelector:
+      node.lifecycle: spot
+EOF
+
+  # metrics server
+  cat <<"EOF" > /var/lib/rancher/k3s/server/manifests/metrics-server.yaml
+apiVersion: helm.cattle.io/v1
+kind: HelmChart
+metadata:
+  name: metrics-server
+  namespace: kube-system
+spec:
+  chart: https://github.com/kubernetes-sigs/metrics-server/releases/download/metrics-server-helm-chart-3.8.2/metrics-server-3.8.2.tgz
+  targetNamespace: kube-system
+  bootstrap: true
+  valuesContent: |-
+    affinity:
+      podAntiAffinity:
+        preferredDuringSchedulingIgnoredDuringExecution:
+        - labelSelector:
+            matchExpressions:
+            - key: node.lifecycle
+              operator: In
+              values:
+              - spot
+          topologyKey: kubernetes.io/hostname
 EOF
 
   # initial backup
@@ -215,8 +311,5 @@ else
   seconary_join
 fi
 
-# make sure local-path is not the default SC
-kubectl patch storageclass local-path -p '{"metadata": {"annotations":{"storageclass.kubernetes.io/is-default-class":"false"}}}'
+kubectl_settings
 
-# configuring kube-system as the default namespace
-kubectl config set-context --current --namespace kube-system

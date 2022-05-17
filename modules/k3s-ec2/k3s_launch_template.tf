@@ -1,8 +1,10 @@
 # master
 
-resource "aws_launch_template" "k3s_lt" { 
-  name_prefix   = "k3s_tpl"
-  image_id      = length(var.ami_id) > 0 ? var.ami_id : data.aws_ami.amazon2.id
+resource "aws_launch_template" "k3s_masters_lt" {
+  for_each = var.k3s_master_instances
+
+  name_prefix   = "k3s_master_${each.key}_tpl"
+  image_id      = each.value.ami_id
   user_data     = data.template_cloudinit_config.k3s_ud.rendered
 
   iam_instance_profile {

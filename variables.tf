@@ -27,39 +27,6 @@ variable "ami_id" {
 
 # master ASG 
 
-variable "k3s_master_desired_capacity" {
-  default = 1
-  type    = number
-}
-
-variable "k3s_master_max_capacity" {
-  default = 1
-  type    = number
-}
-
-variable "k3s_master_min_capacity" {
-  default = 1
-  type    = number
-}
-
-variable "k3s_master_weighted_instance_types" {
-  description = "Master instance types"
-  type        = map(string)
-  default     = { "m6g.medium" = 1 }
-}
-
-variable "k3s_master_on_demand_base_capacity" {
-  type    = number
-  default = 0
-}
-
-variable "k3s_master_on_demand_percentage_above_base_capacity" {
-  type    = number
-  default = 0
-}
-
-#
-
 variable "k3s_master_instances" {
   type    = any
   default = {}

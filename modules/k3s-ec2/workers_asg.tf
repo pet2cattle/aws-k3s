@@ -7,7 +7,7 @@ resource "aws_autoscaling_group" "k3s_workers_asg" {
 
   lifecycle {
     create_before_destroy = true
-    ignore_changes        = [load_balancers, target_group_arns]
+    ignore_changes        = [load_balancers, target_group_arns, desired_capacity]
   }
 
   mixed_instances_policy {

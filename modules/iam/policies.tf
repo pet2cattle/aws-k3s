@@ -1,10 +1,5 @@
 locals {
-  policies = {
-    ecr = {
-      policy      = file("${path.module}/policies/ecr.json")
-      policy_name = "pull_ecr"
-    }
-    
+  policies = {   
     # https://docs.aws.amazon.com/eks/latest/userguide/alb-ingress.html
     # https://docs.aws.amazon.com/eks/latest/userguide/aws-load-balancer-controller.html
     alb_controller = {
