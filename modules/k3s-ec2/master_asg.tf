@@ -36,7 +36,6 @@ resource "aws_autoscaling_group" "k3s_master_asg" {
           weighted_capacity = override.value
         }
       }
-
     }
   }
 

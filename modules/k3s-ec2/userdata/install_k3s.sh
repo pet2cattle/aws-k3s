@@ -298,6 +298,9 @@ spec:
           topologyKey: kubernetes.io/hostname
 EOF
 
+  # install objects from git repo
+  # TODO
+
   # initial backup
   k3s etcd-snapshot --s3 --s3-bucket=${K3S_BUCKET} --etcd-s3-folder=${K3S_BACKUP_PREFIX} --etcd-s3-region=${REGION}
 
