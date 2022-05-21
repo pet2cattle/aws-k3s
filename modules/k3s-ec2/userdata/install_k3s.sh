@@ -10,7 +10,9 @@ mkdir -p ~/.aws
 echo "[default]" > ~/.aws/config
 echo "region = ${REGION}" >> ~/.aws/config
 
-MASTER_INSTANCES=$(aws ec2 describe-instances --filters Name=tag:k3s_cluster_name,Values=${K3S_CLUSTERNAME} Name=tag:k3s_role,Values=master Name=instance-state-name,Values=running --query 'sort_by(Reservations[].Instances[], &LaunchTime)[*].[PrivateIpAddress]' --output text | grep -v None)
+MAIN_IP=$(hostname | grep -Eo "[0-9]+-[0-9]+-[0-9]+-[0-9]+" | tr - .)
+
+MASTER_INSTANCES=$(aws ec2 describe-instances --filters Name=tag:k3s_cluster_name,Values=${K3S_CLUSTERNAME} Name=tag:k3s_role,Values=master Name=instance-state-name,Values=running --query 'sort_by(Reservations[].Instances[], &LaunchTime)[*].[PrivateIpAddress]' --output text | grep -v None | grep -v $MAIN_IP)
 MASTER_INSTANCES_COUNT=$(echo "$MASTER_INSTANCES" | grep -v None | wc -l)
 LOCAL_IP=$(curl -s http://169.254.169.254/latest/meta-data/local-ipv4)
 FLANNEL_IFACE=$(ip -4 route ls | grep default | grep -Po '(?<=dev )(\S+)')
@@ -20,14 +22,10 @@ BOOTSTRAP=$(aws ec2 describe-tags --filters "Name=resource-id,Values=$(curl -s h
 BOOTSTRAP_INSTANCES_COUNT=$(aws ec2 describe-instances --filters Name=instance-state-name,Values=running Name=tag:k3s_bootstrap,Values=true --query 'sort_by(Reservations[].Instances[], &LaunchTime)[*].[PrivateIpAddress]' --output=text | grep -v None | wc -l)
 LIFECYCLE=$(aws ec2 describe-spot-instance-requests --filters Name=instance-id,Values="$(wget -q -O - http://169.254.169.254/latest/meta-data/instance-id)" --region ${REGION} | jq -r '.SpotInstanceRequests | if length > 0 then "spot" else "ondemand" end')
 
-MAIN_IP=$(hostname | grep -Eo "[0-9]+-[0-9]+-[0-9]+-[0-9]+" | tr - .)
+
 
 BASE_OPTS=$(echo  "" \
                   " --token ${K3S_TOKEN}" \
-                  " --disable-cloud-controller" \
-                  " --disable servicelb" \
-                  " --disable traefik" \
-                  " --disable metrics-server" \
                   " --node-ip $LOCAL_IP" \
                   " --advertise-address $LOCAL_IP" \
                   " --flannel-iface $FLANNEL_IFACE" \
@@ -39,8 +37,14 @@ BASE_OPTS=$(echo  "" \
                   " --etcd-s3-folder ${K3S_BACKUP_PREFIX}" \
                   " --etcd-s3-region ${REGION}" \
                   " --node-label node.lifecycle=$LIFECYCLE" \
-                  " --bind-address $MAIN_IP" \
-                  " --advertise-address $MAIN_IP"
+                  ""
+            )
+
+MASTER_OPTS=$(echo  "" \
+                  " --disable-cloud-controller" \
+                  " --disable servicelb" \
+                  " --disable traefik" \
+                  " --disable metrics-server" \
                   ""
             )
 
@@ -59,7 +63,7 @@ kubectl_settings() {
 }
 
 seconary_join() {
-  MASTER_INSTANCES=$(aws ec2 describe-instances --filters Name=tag:k3s_cluster_name,Values=${K3S_CLUSTERNAME} Name=tag:k3s_role,Values=master --query 'sort_by(Reservations[].Instances[], &LaunchTime)[*].[PrivateIpAddress]' --output text | grep -v None)
+  MASTER_INSTANCES=$(aws ec2 describe-instances --filters Name=tag:k3s_cluster_name,Values=${K3S_CLUSTERNAME} Name=tag:k3s_role,Values=master --query 'sort_by(Reservations[].Instances[], &LaunchTime)[*].[PrivateIpAddress]' --output text | grep -v None | grep -v $MAIN_IP)
   MASTER_INSTANCES_COUNT=$(echo "$MASTER_INSTANCES" | grep -v None | wc -l)
 
   if [ $MASTER_INSTANCES_COUNT -ne 0 ];
@@ -69,7 +73,7 @@ seconary_join() {
       # wait for master instances to come up
       sleep 5s
 
-      MASTER_INSTANCES=$(aws ec2 describe-instances --filters Name=tag:k3s_cluster_name,Values=${K3S_CLUSTERNAME} Name=tag:k3s_role,Values=master --query 'sort_by(Reservations[].Instances[], &LaunchTime)[*].[PrivateIpAddress]' --output text | grep -v None)
+      MASTER_INSTANCES=$(aws ec2 describe-instances --filters Name=tag:k3s_cluster_name,Values=${K3S_CLUSTERNAME} Name=tag:k3s_role,Values=master --query 'sort_by(Reservations[].Instances[], &LaunchTime)[*].[PrivateIpAddress]' --output text | grep -v None | grep -v $MAIN_IP)
       MASTER_INSTANCES_COUNT=$(echo "$MASTER_INSTANCES" | grep -v None | wc -l)
     done
   fi
@@ -84,11 +88,19 @@ seconary_join() {
         break
       else
         echo "waiting for $PRIMARY_NODE 6443"
-        sleep 30s
+        sleep 1s
       fi
     done
 
-    curl -sfL https://get.k3s.io | INSTALL_K3S_EXEC="$INSTALL_MODE" sh -s - --server https://$PRIMARY_NODE:6443 $BASE_OPTS
+    if [ "$K3S_ROLE" == "master" ];
+    then
+      echo "installing master mode"
+      curl -sfL https://get.k3s.io | INSTALL_K3S_EXEC="$INSTALL_MODE" sh -s - --server https://$PRIMARY_NODE:6443 $BASE_OPTS $MASTER_OPTS
+    else
+      echo "installing agent mode"
+      curl -sfL https://get.k3s.io | INSTALL_K3S_EXEC="$INSTALL_MODE" sh -s - --server https://$PRIMARY_NODE:6443 $BASE_OPTS
+    fi
+
     if [ $? -eq 0 ]
     then
       echo "Install k3s on $PRIMARY_NODE succeeded"
@@ -112,8 +124,8 @@ then
     if [ $BACKUPS_AVAILABLE -eq 0 ];
     then
       # no backups available, install k3s
-      echo "Cluster init"
-      curl -sfL https://get.k3s.io | INSTALL_K3S_EXEC="$INSTALL_MODE" sh -s - --cluster-init $BASE_OPTS
+      echo "Cluster init - master mode"
+      curl -sfL https://get.k3s.io | INSTALL_K3S_EXEC="$INSTALL_MODE" sh -s - --cluster-init $BASE_OPTS $MASTER_OPTS
 
       # wait for k3s to be Pending (aws-cloud-controller is needed to get to Running state)
       until kubectl get pods -A | grep Pending > /dev/null; 
@@ -144,8 +156,8 @@ then
         exit 1
       fi
 
-      echo "Restore backup $RESTORE_BACKUP"
-      curl -sfL https://get.k3s.io | INSTALL_K3S_EXEC="server" sh -s -  $BASE_OPTS \
+      echo "Restore backup $RESTORE_BACKUP - master mode"
+      curl -sfL https://get.k3s.io | INSTALL_K3S_EXEC="server" sh -s -  $BASE_OPTS $MASTER_OPTS \
                                                                         --cluster-reset \
                                                                         --cluster-reset-restore-path="$RESTORE_BACKUP"
 
@@ -329,6 +341,9 @@ EOF
     # install objects from git repo
     mkdir -p /root/bootstraprepo
     GIT_SSH_COMMAND='ssh -i /root/.ssh/id_bootstraprepo -o IdentitiesOnly=yes -o BatchMode=yes -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null' git clone "${BOOTSTRAP_REPO}" /root/bootstraprepo
+
+    # apply
+    kubectl apply -f /root/bootstraprepo
   fi
 
   # initial backup

@@ -12,10 +12,10 @@ resource "aws_launch_template" "k3s_masters_lt" {
   }
 
   block_device_mappings {
-    device_name = "/dev/xvda"
+    device_name = try(each.value.root_device_name, "/dev/xvda")
 
     ebs {
-      volume_size = 15
+      volume_size = try(each.value.root_volume_size, 15)
       encrypted   = true
       delete_on_termination = true
     }
@@ -44,10 +44,10 @@ resource "aws_launch_template" "k3s_workers_lt" {
   }
 
   block_device_mappings {
-    device_name = "/dev/xvda"
+    device_name = try(each.value.root_device_name, "/dev/xvda")
 
     ebs {
-      volume_size = 15
+      volume_size = try(each.value.root_volume_size, 15)
       encrypted   = true
       delete_on_termination = true
     }
