@@ -27,20 +27,20 @@ LIFECYCLE=$(aws ec2 describe-spot-instance-requests --filters Name=instance-id,V
 BASE_OPTS=$(echo  "" \
                   " --token ${K3S_TOKEN}" \
                   " --node-ip $LOCAL_IP" \
-                  " --advertise-address $LOCAL_IP" \
                   " --flannel-iface $FLANNEL_IFACE" \
-                  " --write-kubeconfig-mode=644" \
                   " --kubelet-arg="cloud-provider=external" \
                   " --kubelet-arg="provider-id=aws:///$PROVIDER_ID" \
-                  " --etcd-s3 " \
-                  " --etcd-s3-bucket ${K3S_BUCKET}" \
-                  " --etcd-s3-folder ${K3S_BACKUP_PREFIX}" \
-                  " --etcd-s3-region ${REGION}" \
                   " --node-label node.lifecycle=$LIFECYCLE" \
                   ""
             )
 
 MASTER_OPTS=$(echo  "" \
+                  " --etcd-s3 " \
+                  " --etcd-s3-bucket ${K3S_BUCKET}" \
+                  " --etcd-s3-folder ${K3S_BACKUP_PREFIX}" \
+                  " --etcd-s3-region ${REGION}" \
+                  " --write-kubeconfig-mode=644" \
+                  " --advertise-address $LOCAL_IP" \
                   " --disable-cloud-controller" \
                   " --disable servicelb" \
                   " --disable traefik" \
