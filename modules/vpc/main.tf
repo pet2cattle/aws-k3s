@@ -18,6 +18,7 @@ resource "aws_subnet" "vpc_subnets" {
   tags = merge(var.tags,
               {
                 "kubernetes.io/cluster/default" = "shared"
+                "kubernetes.io/role/elb" = "1"
               }
               )
 }
