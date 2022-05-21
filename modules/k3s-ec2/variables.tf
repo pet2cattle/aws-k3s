@@ -59,6 +59,11 @@ variable "bootstrap_repo" {
   default = ""
 }
 
+variable "bootstrap_pk_path" {
+  type = string
+  default = ""
+}
+
 # workers ASG
 
 variable "k3s_worker_instances" {

@@ -5,7 +5,7 @@ resource "aws_launch_template" "k3s_masters_lt" {
 
   name_prefix   = "k3s_master_${each.key}_tpl"
   image_id      = each.value.ami_id
-  user_data     = data.template_cloudinit_config.k3s_ud.rendered
+  user_data     = data.template_cloudinit_config.k3s_master_ud[each.key].rendered
 
   iam_instance_profile {
     name = var.instance_profile_name
@@ -37,7 +37,7 @@ resource "aws_launch_template" "k3s_workers_lt" {
 
   name_prefix   = "k3s_worker_${each.key}_tpl"
   image_id      = each.value.ami_id
-  user_data     = data.template_cloudinit_config.k3s_ud.rendered
+  user_data     = data.template_cloudinit_config.k3s_worker_ud[each.key].rendered
 
   iam_instance_profile {
     name = var.instance_profile_name

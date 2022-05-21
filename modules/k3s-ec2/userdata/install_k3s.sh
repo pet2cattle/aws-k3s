@@ -40,6 +40,8 @@ BASE_OPTS=$(echo  "" \
                   ""
             )
 
+PK_BOOTSTRAP="${BOOTSTRAP_PK_PATH}"
+
 export BASE_OPTS="$BASE_OPTS"
 
 BACKUPS_AVAILABLE=$(aws s3 ls s3://${K3S_BUCKET}/${K3S_BACKUP_PREFIX}/ | wc -l)
@@ -163,7 +165,7 @@ then
   else
     # secondary master node alive
     echo "Intalling secondary master node"
-    
+
     seconary_join
   fi
 
@@ -309,9 +311,20 @@ EOF
 
   if [ ! -z "$BOOTSTRAP_REPO" ];
   then
+    # wait for k3s to have Running pods
+    until kubectl get pods -A | grep Running > /dev/null; 
+    do 
+      sleep 5; 
+    done
+
+    mkdir -p /root/.ssh
+    chmod 700 /root/.ssh
+    echo "$PK_BOOTSTRAP" | gzip -d - | base64 -d - > /root/.ssh/id_bootstraprepo
+    chmod 600 /root/.ssh/id_bootstraprepo
+
     # install objects from git repo
     mkdir -p /root/bootstraprepo
-    git clone "$BOOTSTRAP_REPO" /root/bootstraprepo
+    GIT_SSH_COMMAND='ssh -i /root/.ssh/id_bootstraprepo -o IdentitiesOnly=yes -o BatchMode=yes -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null' git clone "$BOOTSTRAP_REPO" /root/bootstraprepo
   fi
 
   # initial backup
