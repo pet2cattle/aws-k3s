@@ -10,15 +10,17 @@ mkdir -p ~/.aws
 echo "[default]" > ~/.aws/config
 echo "region = ${REGION}" >> ~/.aws/config
 
-CLUSTER_INSTANCES=$(aws ec2 describe-instances --filters Name=tag:k3s_cluster_name,Values=${K3S_CLUSTERNAME} Name=tag:k3s_role,Values=master --query 'sort_by(Reservations[].Instances[], &LaunchTime)[*].[PrivateIpAddress]' --output text | grep -v None)
-CLUSTER_INSTANCES_COUNT=$(echo "$CLUSTER_INSTANCES" | grep -v None | wc -l)
+MASTER_INSTANCES=$(aws ec2 describe-instances --filters Name=tag:k3s_cluster_name,Values=${K3S_CLUSTERNAME} Name=tag:k3s_role,Values=master Name=instance-state-name,Values=running --query 'sort_by(Reservations[].Instances[], &LaunchTime)[*].[PrivateIpAddress]' --output text | grep -v None)
+MASTER_INSTANCES_COUNT=$(echo "$MASTER_INSTANCES" | grep -v None | wc -l)
 LOCAL_IP=$(curl -s http://169.254.169.254/latest/meta-data/local-ipv4)
 FLANNEL_IFACE=$(ip -4 route ls | grep default | grep -Po '(?<=dev )(\S+)')
 PROVIDER_ID="$(curl -s http://169.254.169.254/latest/meta-data/placement/availability-zone)/$(curl -s http://169.254.169.254/latest/meta-data/instance-id)"
 K3S_ROLE=$(aws ec2 describe-tags --filters "Name=resource-id,Values=$(curl -s http://169.254.169.254/latest/meta-data/instance-id)" --output=text | grep k3s_role | awk '{ print $NF }' | head -n1)
 BOOTSTRAP=$(aws ec2 describe-tags --filters "Name=resource-id,Values=$(curl -s http://169.254.169.254/latest/meta-data/instance-id)" --output=text | grep k3s_bootstrap | awk '{ print $NF }' | wc -l)
-BOOTSTRAP_INSTANCES_COUNT=$(aws ec2 describe-tags --filters "Name=tag:k3s_bootstrap,Values=true" --query 'sort_by(Reservations[].Instances[], &LaunchTime)[*].[PrivateIpAddress]' --output=text | grep -v None | wc -l)
+BOOTSTRAP_INSTANCES_COUNT=$(aws ec2 describe-instances --filters Name=instance-state-name,Values=running Name=tag:k3s_bootstrap,Values=true --query 'sort_by(Reservations[].Instances[], &LaunchTime)[*].[PrivateIpAddress]' --output=text | grep -v None | wc -l)
 LIFECYCLE=$(aws ec2 describe-spot-instance-requests --filters Name=instance-id,Values="$(wget -q -O - http://169.254.169.254/latest/meta-data/instance-id)" --region ${REGION} | jq -r '.SpotInstanceRequests | if length > 0 then "spot" else "ondemand" end')
+
+MAIN_IP=$(hostname | grep -Eo "[0-9]+-[0-9]+-[0-9]+-[0-9]+" | tr - .)
 
 BASE_OPTS=$(echo  "" \
                   " --token ${K3S_TOKEN}" \
@@ -37,6 +39,8 @@ BASE_OPTS=$(echo  "" \
                   " --etcd-s3-folder ${K3S_BACKUP_PREFIX}" \
                   " --etcd-s3-region ${REGION}" \
                   " --node-label node.lifecycle=$LIFECYCLE" \
+                  " --bind-address $MAIN_IP" \
+                  " --advertise-address $MAIN_IP"
                   ""
             )
 
@@ -55,22 +59,22 @@ kubectl_settings() {
 }
 
 seconary_join() {
-  CLUSTER_INSTANCES=$(aws ec2 describe-instances --filters Name=tag:k3s_cluster_name,Values=${K3S_CLUSTERNAME} Name=tag:k3s_role,Values=master --query 'sort_by(Reservations[].Instances[], &LaunchTime)[*].[PrivateIpAddress]' --output text | grep -v None)
-  CLUSTER_INSTANCES_COUNT=$(echo "$CLUSTER_INSTANCES" | grep -v None | wc -l)
+  MASTER_INSTANCES=$(aws ec2 describe-instances --filters Name=tag:k3s_cluster_name,Values=${K3S_CLUSTERNAME} Name=tag:k3s_role,Values=master --query 'sort_by(Reservations[].Instances[], &LaunchTime)[*].[PrivateIpAddress]' --output text | grep -v None)
+  MASTER_INSTANCES_COUNT=$(echo "$MASTER_INSTANCES" | grep -v None | wc -l)
 
-  if [ $CLUSTER_INSTANCES_COUNT -ne 0 ];
+  if [ $MASTER_INSTANCES_COUNT -ne 0 ];
   then
-    until [ $CLUSTER_INSTANCES_COUNT -gt 0 ];
+    until [ $MASTER_INSTANCES_COUNT -gt 0 ];
     do
       # wait for master instances to come up
       sleep 5s
 
-      CLUSTER_INSTANCES=$(aws ec2 describe-instances --filters Name=tag:k3s_cluster_name,Values=${K3S_CLUSTERNAME} Name=tag:k3s_role,Values=master --query 'sort_by(Reservations[].Instances[], &LaunchTime)[*].[PrivateIpAddress]' --output text | grep -v None)
-      CLUSTER_INSTANCES_COUNT=$(echo "$CLUSTER_INSTANCES" | grep -v None | wc -l)
+      MASTER_INSTANCES=$(aws ec2 describe-instances --filters Name=tag:k3s_cluster_name,Values=${K3S_CLUSTERNAME} Name=tag:k3s_role,Values=master --query 'sort_by(Reservations[].Instances[], &LaunchTime)[*].[PrivateIpAddress]' --output text | grep -v None)
+      MASTER_INSTANCES_COUNT=$(echo "$MASTER_INSTANCES" | grep -v None | wc -l)
     done
   fi
 
-  for PRIMARY_NODE in $CLUSTER_INSTANCES;
+  for PRIMARY_NODE in $MASTER_INSTANCES;
   do
     while true;
     do
@@ -99,7 +103,7 @@ seconary_join() {
 if [ "$K3S_ROLE" == "master" ];
 then
   INSTALL_MODE="server"
-  DIFF_INSTANCES=$(($CLUSTER_INSTANCES_COUNT-$BOOTSTRAP_INSTANCES_COUNT))
+  DIFF_INSTANCES=$(($MASTER_INSTANCES_COUNT-$BOOTSTRAP_INSTANCES_COUNT))
 
   if [ $DIFF_INSTANCES -le 1 ] && [ $BOOTSTRAP -eq 1 ];
   then
@@ -309,7 +313,7 @@ spec:
           topologyKey: kubernetes.io/hostname
 EOF
 
-  if [ ! -z "$BOOTSTRAP_REPO" ];
+  if [ ! -z "${BOOTSTRAP_REPO}" ];
   then
     # wait for k3s to have Running pods
     until kubectl get pods -A | grep Running > /dev/null; 
@@ -319,12 +323,12 @@ EOF
 
     mkdir -p /root/.ssh
     chmod 700 /root/.ssh
-    echo "$PK_BOOTSTRAP" | gzip -d - | base64 -d - > /root/.ssh/id_bootstraprepo
+    echo "$PK_BOOTSTRAP" | base64 -d - | gzip -d -  > /root/.ssh/id_bootstraprepo
     chmod 600 /root/.ssh/id_bootstraprepo
 
     # install objects from git repo
     mkdir -p /root/bootstraprepo
-    GIT_SSH_COMMAND='ssh -i /root/.ssh/id_bootstraprepo -o IdentitiesOnly=yes -o BatchMode=yes -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null' git clone "$BOOTSTRAP_REPO" /root/bootstraprepo
+    GIT_SSH_COMMAND='ssh -i /root/.ssh/id_bootstraprepo -o IdentitiesOnly=yes -o BatchMode=yes -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null' git clone "${BOOTSTRAP_REPO}" /root/bootstraprepo
   fi
 
   # initial backup
