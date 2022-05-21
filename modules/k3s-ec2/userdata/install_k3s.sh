@@ -16,6 +16,8 @@ LOCAL_IP=$(curl -s http://169.254.169.254/latest/meta-data/local-ipv4)
 FLANNEL_IFACE=$(ip -4 route ls | grep default | grep -Po '(?<=dev )(\S+)')
 PROVIDER_ID="$(curl -s http://169.254.169.254/latest/meta-data/placement/availability-zone)/$(curl -s http://169.254.169.254/latest/meta-data/instance-id)"
 K3S_ROLE=$(aws ec2 describe-tags --filters "Name=resource-id,Values=$(curl -s http://169.254.169.254/latest/meta-data/instance-id)" --output=text | grep k3s_role | awk '{ print $NF }' | head -n1)
+BOOTSTRAP=$(aws ec2 describe-tags --filters "Name=resource-id,Values=$(curl -s http://169.254.169.254/latest/meta-data/instance-id)" --output=text | grep k3s_bootstrap | awk '{ print $NF }' | wc -l)
+BOOTSTRAP_INSTANCES_COUNT=$(aws ec2 describe-tags --filters "Name=tag:k3s_bootstrap,Values=true" --query 'sort_by(Reservations[].Instances[], &LaunchTime)[*].[PrivateIpAddress]' --output=text | grep -v None | wc -l)
 LIFECYCLE=$(aws ec2 describe-spot-instance-requests --filters Name=instance-id,Values="$(wget -q -O - http://169.254.169.254/latest/meta-data/instance-id)" --region ${REGION} | jq -r '.SpotInstanceRequests | if length > 0 then "spot" else "ondemand" end')
 
 BASE_OPTS=$(echo  "" \
@@ -51,6 +53,9 @@ kubectl_settings() {
 }
 
 seconary_join() {
+  CLUSTER_INSTANCES=$(aws ec2 describe-instances --filters Name=tag:k3s_cluster_name,Values=${K3S_CLUSTERNAME} Name=tag:k3s_role,Values=master --query 'sort_by(Reservations[].Instances[], &LaunchTime)[*].[PrivateIpAddress]' --output text | grep -v None)
+  CLUSTER_INSTANCES_COUNT=$(echo "$CLUSTER_INSTANCES" | grep -v None | wc -l)
+
   if [ $CLUSTER_INSTANCES_COUNT -ne 0 ];
   then
     until [ $CLUSTER_INSTANCES_COUNT -gt 0 ];
@@ -77,7 +82,7 @@ seconary_join() {
       fi
     done
 
-    curl -sfL https://get.k3s.io | INSTALL_K3S_EXEC="server" sh -s - --server https://$PRIMARY_NODE:6443 $BASE_OPTS
+    curl -sfL https://get.k3s.io | INSTALL_K3S_EXEC="$INSTALL_MODE" sh -s - --server https://$PRIMARY_NODE:6443 $BASE_OPTS
     if [ $? -eq 0 ]
     then
       echo "Install k3s on $PRIMARY_NODE succeeded"
@@ -91,15 +96,18 @@ seconary_join() {
 
 if [ "$K3S_ROLE" == "master" ];
 then
-  if [ $CLUSTER_INSTANCES_COUNT -eq 1 ];
+  INSTALL_MODE="server"
+  DIFF_INSTANCES=$(($CLUSTER_INSTANCES_COUNT-$BOOTSTRAP_INSTANCES_COUNT))
+
+  if [ $DIFF_INSTANCES -le 1 ] && [ $BOOTSTRAP -eq 1 ];
   then
-    # first / only master node alive
+    # master node alive in bootstrap mode
 
     if [ $BACKUPS_AVAILABLE -eq 0 ];
     then
       # no backups available, install k3s
       echo "Cluster init"
-      curl -sfL https://get.k3s.io | INSTALL_K3S_EXEC="server" sh -s - --cluster-init $BASE_OPTS
+      curl -sfL https://get.k3s.io | INSTALL_K3S_EXEC="$INSTALL_MODE" sh -s - --cluster-init $BASE_OPTS
 
       # wait for k3s to be Pending (aws-cloud-controller is needed to get to Running state)
       until kubectl get pods -A | grep Pending > /dev/null; 
@@ -155,6 +163,7 @@ then
   else
     # secondary master node alive
     echo "Intalling secondary master node"
+    
     seconary_join
   fi
 
@@ -298,14 +307,20 @@ spec:
           topologyKey: kubernetes.io/hostname
 EOF
 
-  # install objects from git repo
-  # TODO
+  if [ ! -z "$BOOTSTRAP_REPO" ];
+  then
+    # install objects from git repo
+    mkdir -p /root/bootstraprepo
+    git clone "$BOOTSTRAP_REPO" /root/bootstraprepo
+  fi
 
   # initial backup
   k3s etcd-snapshot --s3 --s3-bucket=${K3S_BUCKET} --etcd-s3-folder=${K3S_BACKUP_PREFIX} --etcd-s3-region=${REGION}
 
 else
   echo "worker node"
+  INSTALL_MODE="agent"
+
   seconary_join
 fi
 

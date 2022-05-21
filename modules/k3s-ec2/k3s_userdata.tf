@@ -18,6 +18,7 @@ data "template_cloudinit_config" "k3s_ud" {
                                                                                     K3S_BUCKET = var.s3_bucket_name
                                                                                     K3S_BACKUP_PREFIX = "${var.s3_backup_prefix}/${var.k3s_cluster_name}"
                                                                                     MAIN_VPC_CIDR_BLOCK = var.main_vpc_cidr_block
+                                                                                    BOOTSTRAP_REPO = var.bootstrap_repo
                                                                                   })
   }
 }

@@ -47,6 +47,15 @@ resource "aws_autoscaling_group" "k3s_master_asg" {
   health_check_type         = "EC2"
   force_delete              = true
 
+  dynamic "tag" {
+    for_each = toset(try(each.value.bootstrap, false) ? ["1"] : [])
+    content {
+      key                 = "k3s_bootstrap"
+      value               = "true"
+      propagate_at_launch = true
+    }
+  }
+
   tag {
     key                 = "k3s_cluster_name"
     value               = var.k3s_cluster_name

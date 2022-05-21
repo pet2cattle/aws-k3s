@@ -54,6 +54,11 @@ variable "k3s_master_instances" {
   default = {}
 }
 
+variable "bootstrap_repo" {
+  type = string
+  default = ""
+}
+
 # workers ASG
 
 variable "k3s_worker_instances" {
