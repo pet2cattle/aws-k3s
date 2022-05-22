@@ -37,6 +37,14 @@ module "s3" {
   tags = var.tags
 }
 
+module "certs" {
+  source = "./modules/certs"
+
+  certs = var.certs
+  
+  tags = var.tags
+}
+
 module "k3s-ec2" {
   source = "./modules/k3s-ec2"
 

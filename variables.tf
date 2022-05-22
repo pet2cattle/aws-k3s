@@ -38,3 +38,10 @@ variable "k3s_worker_instances" {
   type    = any
   default = {}
 }
+
+# ACM certs
+
+variable "certs" {
+  type    = any
+  default = {}
+}
