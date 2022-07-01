@@ -45,3 +45,10 @@ variable "certs" {
   type    = any
   default = {}
 }
+
+# route53 zones
+
+variable "zones" {
+  type    = any
+  default = {}
+}

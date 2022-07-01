@@ -36,6 +36,13 @@ module "s3" {
 
   tags = var.tags
 }
+module "route53" {
+  source = "./modules/route53"
+
+  zones = var.zones
+  
+  tags = var.tags
+}
 
 module "certs" {
   source = "./modules/certs"
