@@ -5,6 +5,11 @@ set -x
 # ALB controller - Kustomize dependency
 yum install git nc jq -y
 
+# install helm
+curl -fsSL -o - https://raw.githubusercontent.com/helm/helm/main/scripts/get-helm-3 | bash
+echo "export KUBECONFIG=/etc/rancher/k3s/k3s.yaml" >> /etc/bashrc 
+
+
 # aws cli config
 mkdir -p ~/.aws
 echo "[default]" > ~/.aws/config
@@ -21,7 +26,7 @@ K3S_ROLE=$(aws ec2 describe-tags --filters "Name=resource-id,Values=$(curl -s ht
 BOOTSTRAP=$(aws ec2 describe-tags --filters "Name=resource-id,Values=$(curl -s http://169.254.169.254/latest/meta-data/instance-id)" --output=text | grep k3s_bootstrap | awk '{ print $NF }' | wc -l)
 BOOTSTRAP_INSTANCES_COUNT=$(aws ec2 describe-instances --filters Name=instance-state-name,Values=running Name=tag:k3s_bootstrap,Values=true --query 'sort_by(Reservations[].Instances[], &LaunchTime)[*].[PrivateIpAddress]' --output=text | grep -v None | wc -l)
 LIFECYCLE=$(aws ec2 describe-spot-instance-requests --filters Name=instance-id,Values="$(wget -q -O - http://169.254.169.254/latest/meta-data/instance-id)" --region ${REGION} | jq -r '.SpotInstanceRequests | if length > 0 then "spot" else "ondemand" end')
-
+TAINT=${TAINT}
 
 
 BASE_OPTS=$(echo  "" \
@@ -33,6 +38,14 @@ BASE_OPTS=$(echo  "" \
                   " --node-label node.lifecycle=$LIFECYCLE" \
                   ""
             )
+
+if [ ! -z "$TAINT" ];
+then
+  BASE_OPTS=$(echo "$BASE_OPTS" \
+                  " --node-taint $TAINT:NoExecute" \
+                  ""
+            )
+fi
 
 MASTER_OPTS=$(echo  "" \
                   " --etcd-s3 " \

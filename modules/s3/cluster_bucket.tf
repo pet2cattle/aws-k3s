@@ -34,6 +34,6 @@ data "aws_iam_policy_document" "k3s_allow_access_bucket" {
   }
 }
 
-output "s3_bucket_name" {
+output "cluster_bucket_name" {
   value = aws_s3_bucket.k3s_bucket.bucket
 }

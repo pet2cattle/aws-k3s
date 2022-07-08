@@ -30,9 +30,13 @@ module "iam" {
 module "s3" {
   source = "./modules/s3"
 
+  # bucket for backing up the cluster
   k3s_cluster_name = var.k3s_cluster_name
 
   iam_role_arn = module.iam.iam_role_arn
+
+  # app buckets
+  buckets = var.buckets
 
   tags = var.tags
 }
@@ -73,7 +77,7 @@ module "k3s-ec2" {
   # workers
   k3s_worker_instances = var.k3s_worker_instances
 
-  s3_bucket_name = module.s3.s3_bucket_name
+  s3_bucket_name = module.s3.cluster_bucket_name
 
   tags = var.tags
 }

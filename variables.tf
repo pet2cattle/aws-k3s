@@ -52,3 +52,10 @@ variable "zones" {
   type    = any
   default = {}
 }
+
+# app buckets
+
+variable "buckets" {
+  type    = any
+  default = {}
+}

@@ -6,6 +6,13 @@ variable "iam_role_arn" {
   type = string
 }
 
+# app buckets
+
+variable "buckets" {
+  type    = any
+  default = {}
+}
+
 # TAGS
 
 variable "tags" {

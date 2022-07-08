@@ -22,6 +22,7 @@ data "template_cloudinit_config" "k3s_master_ud" {
                                                                                     MAIN_VPC_CIDR_BLOCK = var.main_vpc_cidr_block
                                                                                     BOOTSTRAP_REPO = try(each.value.bootstrap_repo, "")
                                                                                     BOOTSTRAP_PK_PATH = length(try(each.value.bootstrap_pk_path, "")) > 0 ? base64gzip(file(each.value.bootstrap_pk_path)) : ""
+                                                                                    TAINT = try(each.value.taint, "")
                                                                                   })
   }
 }
@@ -50,6 +51,7 @@ data "template_cloudinit_config" "k3s_worker_ud" {
                                                                                     MAIN_VPC_CIDR_BLOCK = var.main_vpc_cidr_block
                                                                                     BOOTSTRAP_REPO = ""
                                                                                     BOOTSTRAP_PK_PATH = ""
+                                                                                    TAINT = try(each.value.taint, "")
                                                                                   })
   }
 }
