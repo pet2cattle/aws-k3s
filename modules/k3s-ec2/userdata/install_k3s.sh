@@ -257,9 +257,6 @@ spec:
   valuesContent: |-
     storageClasses:
     - name: ebs-gp2
-      # annotation metadata
-      annotations:
-        storageclass.kubernetes.io/is-default-class: "true"
       volumeBindingMode: WaitForFirstConsumer
       reclaimPolicy: Retain
       parameters:
