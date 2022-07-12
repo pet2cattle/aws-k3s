@@ -25,6 +25,10 @@ variable "k3s_cluster_name" {
 
 # iam
 
+variable "iam_role_arn" {
+  type = string
+}
+
 variable "instance_profile_name" {
   type = string
 }

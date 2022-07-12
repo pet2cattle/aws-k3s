@@ -66,6 +66,7 @@ module "k3s-ec2" {
 
   # iam
   instance_profile_name = module.iam.instance_profile_name
+  iam_role_arn = module.iam.iam_role_arn
 
   # k3s settings
   k3s_token = var.k3s_token
