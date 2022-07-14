@@ -287,28 +287,6 @@ spec:
       - name: ecr
 EOF
 
-  : kube2iam
-  cat <<"EOF" > /var/lib/rancher/k3s/server/manifests/kube2iam.yaml
-apiVersion: helm.cattle.io/v1
-kind: HelmChart
-metadata:
-  name: kube2iam
-  namespace: kube-system
-spec:
-  chart: https://github.com/jtblin/kube2iam/releases/download/kube2iam-2.6.0/kube2iam-2.6.0.tgz
-  targetNamespace: kube-system
-  bootstrap: true
-  valuesContent: |-
-    extraArgs:
-      base-role-arn: arn:aws:iam::${ACCOUNT_ID}:role/
-      default-role: ${IAM_ROLE}
-    host:
-      iptables: true
-      interface: cni0
-    aws:
-      region: ${REGION}
-EOF
-
   : aws-node-termination-handler
   cat <<"EOF" > /var/lib/rancher/k3s/server/manifests/termination-handler.yaml
 apiVersion: helm.cattle.io/v1

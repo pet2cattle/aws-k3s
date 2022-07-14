@@ -28,7 +28,7 @@ data "aws_iam_policy_document" "app_buckets_allow_access_bucket" {
 
     principals {
       type        = "AWS"
-      identifiers = [var.iam_role_arn]
+      identifiers = try([var.users[each.key].arn], [])
     }
 
     actions = [

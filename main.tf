@@ -24,7 +24,14 @@ module "iam" {
 
   k3s_cluster_name = var.k3s_cluster_name
 
+  access_keys = var.access_keys
+
   tags = var.tags
+}
+
+output "access_keys" {
+  value = module.iam.secrets
+  sensitive = true
 }
 
 module "s3" {
@@ -37,6 +44,8 @@ module "s3" {
 
   # app buckets
   buckets = var.buckets
+
+  users = module.iam.users
 
   tags = var.tags
 }

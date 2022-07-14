@@ -13,6 +13,11 @@ variable "buckets" {
   default = {}
 }
 
+variable "users" {
+  type    = any
+  default = {}
+}
+
 # TAGS
 
 variable "tags" {

@@ -46,6 +46,13 @@ variable "certs" {
   default = {}
 }
 
+# IAM
+
+variable "access_keys" {
+  type    = any
+  default = {}
+}
+
 # route53 zones
 
 variable "zones" {
