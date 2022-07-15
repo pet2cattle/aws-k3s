@@ -215,7 +215,7 @@ then
   kubectl create secret docker-registry ecr --docker-server 602401143452.dkr.ecr.us-west-2.amazonaws.com --docker-username=AWS --docker-password=$(aws ecr get-login-password) -n kube-system
 
   # cron to update it
-  (crontab -l 2>/dev/null; echo "0 */11 * * * kubeconfig delete secret ecr; kubectl create secret docker-registry ecr --docker-server 602401143452.dkr.ecr.us-west-2.amazonaws.com --docker-username=AWS --docker-password=$(aws ecr get-login-password) -n kube-system"; ) | crontab -
+  (crontab -l 2>/dev/null; echo "0 */11 * * * kubectl delete secret ecr -n kube-system; kubectl create secret docker-registry ecr --docker-server 602401143452.dkr.ecr.us-west-2.amazonaws.com --docker-username=AWS --docker-password=$(aws ecr get-login-password) -n kube-system"; ) | crontab -
 
   # basic helm charts
 
@@ -286,6 +286,22 @@ spec:
     imagePullSecrets:
       - name: ecr
 EOF
+
+#   : vpc cni
+#   cat <<"EOF" > /var/lib/rancher/k3s/server/manifests/vpc-cni.yaml
+# apiVersion: helm.cattle.io/v1
+# kind: HelmChart
+# metadata:
+#   name: vpc-cni
+#   namespace: kube-system
+# spec:
+#   chart: https://aws.github.io/eks-charts/aws-vpc-cni-1.1.17.tgz
+#   targetNamespace: kube-system
+#   bootstrap: true
+#   valuesContent: |-
+#     imagePullSecrets:
+#       - name: ecr
+# EOF
 
   : aws-node-termination-handler
   cat <<"EOF" > /var/lib/rancher/k3s/server/manifests/termination-handler.yaml

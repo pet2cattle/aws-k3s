@@ -15,11 +15,13 @@ resource "aws_subnet" "vpc_subnets" {
 
   map_public_ip_on_launch = true
 
-  tags = merge(var.tags,
-              {
-                "kubernetes.io/cluster/default" = "shared"
-                "kubernetes.io/role/elb" = "1"
-              }
+  tags = merge(
+                var.tags,
+                {
+                  "kubernetes.io/cluster/default" = "shared"
+                  "kubernetes.io/role/elb" = "1"
+                },
+                try({"Name" = var.appname }, {})
               )
 }
 

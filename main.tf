@@ -9,6 +9,8 @@ provider "aws" {
 module "vpc" {
   source = "./modules/vpc"
 
+  appname = var.k3s_cluster_name
+
   tags = var.tags
 }
 
