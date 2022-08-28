@@ -325,6 +325,10 @@ spec:
       node.lifecycle: spot
 EOF
 
+  : IRSA
+  # TODO: https://cert-manager.io/docs/installation/
+  # TODO: https://github.com/aws/amazon-eks-pod-identity-webhook
+
   : metrics server
   cat <<"EOF" > /var/lib/rancher/k3s/server/manifests/metrics.yaml
 apiVersion: helm.cattle.io/v1
