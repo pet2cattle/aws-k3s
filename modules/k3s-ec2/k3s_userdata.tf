@@ -29,6 +29,8 @@ data "template_cloudinit_config" "k3s_master_ud" {
     content_type = "text/x-shellscript"
     content      = templatefile("${path.module}/userdata/install_k3s.sh",  merge(local.template_vars,  {
                                                                                                   TAINT             = try(each.value.taint, "")
+                                                                                                  EIP               = try(each.value.eyp?"true":"false", "false")
+                                                                                                  CLOUD_ENABLED     = try(each.value.cloud_enabled?"true":"false", "false")
                                                                                                   BOOTSTRAP_REPO    = try(each.value.bootstrap_repo, "")
                                                                                                   BOOTSTRAP_PK_PATH = length(try(each.value.bootstrap_pk_path, "")) > 0 ? base64gzip(file(each.value.bootstrap_pk_path)) : ""
                                                                                                 })

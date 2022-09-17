@@ -27,7 +27,14 @@ BOOTSTRAP=$(aws ec2 describe-tags --filters "Name=resource-id,Values=$(curl -s h
 BOOTSTRAP_INSTANCES_COUNT=$(aws ec2 describe-instances --filters Name=instance-state-name,Values=running Name=tag:k3s_bootstrap,Values=true --query 'sort_by(Reservations[].Instances[], &LaunchTime)[*].[PrivateIpAddress]' --output=text | grep -v None | wc -l)
 LIFECYCLE=$(aws ec2 describe-spot-instance-requests --filters Name=instance-id,Values="$(wget -q -O - http://169.254.169.254/latest/meta-data/instance-id)" --region ${REGION} | jq -r '.SpotInstanceRequests | if length > 0 then "spot" else "ondemand" end')
 TAINT=${TAINT}
+EIP=${EIP}
 
+if [ "$K3S_ROLE" == "master" ];
+then
+  CLOUD_ENABLED=${CLOUD_ENABLED}
+else
+  CLOUD_ENABLED="false"
+fi
 
 BASE_OPTS=$(echo  "" \
                   " --token ${K3S_TOKEN}" \
@@ -36,6 +43,7 @@ BASE_OPTS=$(echo  "" \
                   " --kubelet-arg="cloud-provider=external" \
                   " --kubelet-arg="provider-id=aws:///$PROVIDER_ID" \
                   " --node-label node.lifecycle=$LIFECYCLE" \
+                  " --node-label node.eip=$EIP" \
                   ""
             )
 
@@ -47,19 +55,33 @@ then
             )
 fi
 
-MASTER_OPTS=$(echo  "" \
-                  " --etcd-s3 " \
-                  " --etcd-s3-bucket ${K3S_BUCKET}" \
-                  " --etcd-s3-folder ${K3S_BACKUP_PREFIX}" \
-                  " --etcd-s3-region ${REGION}" \
-                  " --write-kubeconfig-mode=644" \
-                  " --advertise-address $LOCAL_IP" \
-                  " --disable-cloud-controller" \
-                  " --disable servicelb" \
-                  " --disable traefik" \
-                  " --disable metrics-server" \
-                  ""
-            )
+if [ "$CLOUD_ENABLED" == "true" ];
+then
+  MASTER_OPTS=$(echo  "" \
+                    " --etcd-s3 " \
+                    " --etcd-s3-bucket ${K3S_BUCKET}" \
+                    " --etcd-s3-folder ${K3S_BACKUP_PREFIX}" \
+                    " --etcd-s3-region ${REGION}" \
+                    " --write-kubeconfig-mode=644" \
+                    " --advertise-address $LOCAL_IP" \
+                    " --disable-cloud-controller" \
+                    " --disable servicelb" \
+                    " --disable traefik" \
+                    " --disable metrics-server" \
+                    ""
+              )
+else
+  MASTER_OPTS=$(echo  "" \
+                    " --etcd-s3 " \
+                    " --etcd-s3-bucket ${K3S_BUCKET}" \
+                    " --etcd-s3-folder ${K3S_BACKUP_PREFIX}" \
+                    " --etcd-s3-region ${REGION}" \
+                    " --write-kubeconfig-mode=644" \
+                    " --advertise-address $LOCAL_IP" \
+                    " --disable metrics-server" \
+                    ""
+              )
+fi
 
 PK_BOOTSTRAP="${BOOTSTRAP_PK_PATH}"
 
@@ -221,9 +243,11 @@ then
 
   mkdir -p /var/lib/rancher/k3s/server/manifests/
 
-  # https://kubernetes.github.io/cloud-provider-aws/index.yaml
-  : aws-cloud-provider
-  cat <<"EOF" > /var/lib/rancher/k3s/server/manifests/aws-cloud-provider.yaml
+  if [ "$CLOUD_ENABLED" == "true" ];
+  then
+    # https://kubernetes.github.io/cloud-provider-aws/index.yaml
+    : aws-cloud-provider
+    cat <<"EOF" > /var/lib/rancher/k3s/server/manifests/aws-cloud-provider.yaml
 apiVersion: helm.cattle.io/v1
 kind: HelmChart
 metadata:
@@ -242,9 +266,9 @@ spec:
     nodeSelector:
       node-role.kubernetes.io/master: "true"
 EOF
- 
-  : ebs-csi
-  cat <<"EOF" > /var/lib/rancher/k3s/server/manifests/ebs-csi.yaml
+
+    : ebs-csi
+    cat <<"EOF" > /var/lib/rancher/k3s/server/manifests/ebs-csi.yaml
 apiVersion: helm.cattle.io/v1
 kind: HelmChart
 metadata:
@@ -264,11 +288,11 @@ spec:
         type: gp2
 EOF
 
-  : TargetGroupBinding
-  kubectl apply -k "github.com/aws/eks-charts/stable/aws-load-balancer-controller/crds?ref=master"
+    : TargetGroupBinding
+    kubectl apply -k "github.com/aws/eks-charts/stable/aws-load-balancer-controller/crds?ref=master"
 
-  : aws-load-balancer-controller
-  cat <<"EOF" > /var/lib/rancher/k3s/server/manifests/alb-controller.yaml
+    : aws-load-balancer-controller
+    cat <<"EOF" > /var/lib/rancher/k3s/server/manifests/alb-controller.yaml
 apiVersion: helm.cattle.io/v1
 kind: HelmChart
 metadata:
@@ -287,21 +311,28 @@ spec:
       - name: ecr
 EOF
 
-#   : vpc cni
-#   cat <<"EOF" > /var/lib/rancher/k3s/server/manifests/vpc-cni.yaml
-# apiVersion: helm.cattle.io/v1
-# kind: HelmChart
-# metadata:
-#   name: vpc-cni
-#   namespace: kube-system
-# spec:
-#   chart: https://aws.github.io/eks-charts/aws-vpc-cni-1.1.17.tgz
-#   targetNamespace: kube-system
-#   bootstrap: true
-#   valuesContent: |-
-#     imagePullSecrets:
-#       - name: ecr
+#     : vpc cni
+#     cat <<"EOF" > /var/lib/rancher/k3s/server/manifests/vpc-cni.yaml
+#   apiVersion: helm.cattle.io/v1
+#   kind: HelmChart
+#   metadata:
+#     name: vpc-cni
+#     namespace: kube-system
+#   spec:
+#     chart: https://aws.github.io/eks-charts/aws-vpc-cni-1.1.17.tgz
+#     targetNamespace: kube-system
+#     bootstrap: true
+#     valuesContent: |-
+#       imagePullSecrets:
+#         - name: ecr
 # EOF
+
+
+    : IRSA
+    # TODO: https://cert-manager.io/docs/installation/
+    # TODO: https://github.com/aws/amazon-eks-pod-identity-webhook
+
+  fi
 
   : aws-node-termination-handler
   cat <<"EOF" > /var/lib/rancher/k3s/server/manifests/termination-handler.yaml
@@ -324,10 +355,6 @@ spec:
     nodeSelector:
       node.lifecycle: spot
 EOF
-
-  : IRSA
-  # TODO: https://cert-manager.io/docs/installation/
-  # TODO: https://github.com/aws/amazon-eks-pod-identity-webhook
 
   : metrics server
   cat <<"EOF" > /var/lib/rancher/k3s/server/manifests/metrics.yaml
