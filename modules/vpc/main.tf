@@ -25,6 +25,17 @@ resource "aws_subnet" "vpc_subnets" {
               )
 }
 
+resource "aws_db_subnet_group" "subnet_group" {
+  name       = var.appname
+  subnet_ids = [ for each in aws_subnet.vpc_subnets : each.id ]
+
+  tags = merge(
+                var.tags,
+                try({"Name" = var.appname }, {})
+              )
+}
+
+
 resource "aws_internet_gateway" "inet_gw" {
   vpc_id = aws_vpc.server_vpc.id
 

@@ -54,6 +54,8 @@ data "template_cloudinit_config" "k3s_worker_ud" {
     content_type = "text/x-shellscript"
     content      = templatefile("${path.module}/userdata/install_k3s.sh", merge(local.template_vars,  {
                                                                                                         TAINT             = try(each.value.taint, "")
+                                                                                                        EIP               = ""
+                                                                                                        CLOUD_ENABLED     = ""
                                                                                                         BOOTSTRAP_REPO    = ""
                                                                                                         BOOTSTRAP_PK_PATH = ""
                                                                                                       })
