@@ -162,11 +162,14 @@ then
       echo "Cluster init - master mode"
       curl -sfL https://get.k3s.io | INSTALL_K3S_EXEC="$INSTALL_MODE" sh -s - --cluster-init $BASE_OPTS $MASTER_OPTS
 
-      # wait for k3s to be Pending (aws-cloud-controller is needed to get to Running state)
-      until kubectl get pods -A | grep Pending > /dev/null; 
-      do 
-        sleep 5; 
-      done
+      if [ "$CLOUD_ENABLED" == "true" ];
+      then
+        # wait for k3s to be Pending (aws-cloud-controller is needed to get to Running state)
+        until kubectl get pods -A | grep Pending > /dev/null; 
+        do 
+          sleep 5; 
+        done
+      fi
 
     else
       # backups available, restore k3s
