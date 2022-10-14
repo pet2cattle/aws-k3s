@@ -14,6 +14,14 @@ module "vpc" {
   tags = var.tags
 }
 
+module "eip" {
+  source = "./modules/eip"
+
+  count = var.eip.count
+
+  tags = var.tags
+}
+
 module "keypair" {
   source = "./modules/keypair"
 

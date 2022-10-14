@@ -66,3 +66,10 @@ variable "buckets" {
   type    = any
   default = {}
 }
+
+# eIP
+
+variable "eip" {
+  type    = any
+  default = {}
+}

@@ -7,8 +7,11 @@ resource "aws_launch_template" "k3s_masters_lt" {
   image_id      = each.value.ami_id
   user_data     = data.template_cloudinit_config.k3s_master_ud[each.key].rendered
 
-  iam_instance_profile {
-    name = var.instance_profile_name
+  dynamic "iam_instance_profile" {
+    for_each = try(each.value.cloud_enabled, false) ? ["x"] : []
+    content {
+      name = var.instance_profile_name
+    }
   }
 
   block_device_mappings {
