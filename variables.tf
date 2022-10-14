@@ -73,3 +73,10 @@ variable "eip" {
   type    = any
   default = {}
 }
+
+# IAM
+
+variable "iam" {
+  type    = any
+  default = {}
+}

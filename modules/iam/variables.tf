@@ -7,6 +7,16 @@ variable "access_keys" {
   default = {}
 }
 
+variable "attach_admin" {
+  type    = bool
+  default = false
+}
+
+variable "attach_ecr_ro" {
+  type    = bool
+  default = false
+}
+
 # TAGS
 
 variable "tags" {

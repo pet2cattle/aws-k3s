@@ -36,6 +36,8 @@ module "iam" {
 
   access_keys = var.access_keys
 
+  attach_admin = try(var.iam.admin_bootstrap, false)
+
   tags = var.tags
 }
 

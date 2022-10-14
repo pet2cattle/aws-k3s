@@ -41,6 +41,7 @@ data "aws_iam_policy" "AdministratorAccess" {
 }
 
 resource "aws_iam_role_policy_attachment" "k3s-admin-policy-attach" {
+  count      = var.attach_admin ? 1 : 0
   role       = aws_iam_role.aws_ec2_custom_role.name
   policy_arn = data.aws_iam_policy.AdministratorAccess.arn
 }
@@ -52,6 +53,7 @@ data "aws_iam_policy" "AmazonEC2ContainerRegistryReadOnly" {
 }
 
 resource "aws_iam_role_policy_attachment" "k3s-AmazonEC2ContainerRegistryReadOnly-policy-attach" {
+  count      = var.attach_ecr_ro ? 1 : 0
   role       = aws_iam_role.aws_ec2_custom_role.name
   policy_arn = data.aws_iam_policy.AmazonEC2ContainerRegistryReadOnly.arn
 }
