@@ -9,6 +9,9 @@ yum install git nc jq -y
 curl -fsSL -o - https://raw.githubusercontent.com/helm/helm/main/scripts/get-helm-3 | bash
 echo "export KUBECONFIG=/etc/rancher/k3s/k3s.yaml" >> /etc/bashrc 
 
+# manually install k
+curl -fsSL -o /usr/local/bin/k https://raw.githubusercontent.com/jordiprats/bash-k/master/k
+chmod +x /usr/local/bin/k
 
 # aws cli config
 mkdir -p ~/.aws
@@ -113,38 +116,44 @@ seconary_join() {
     done
   fi
 
-  for PRIMARY_NODE in $MASTER_INSTANCES;
+  while true;
   do
-    while true;
+    for PRIMARY_NODE in $MASTER_INSTANCES;
     do
       nc -zv $PRIMARY_NODE 6443
       if [ $? -eq 0 ];
       then
+        ACTIVE_PRIMARY_NODE=$PRIMARY_NODE
         break
       else
-        echo "waiting for $PRIMARY_NODE 6443"
+        echo "unable to connect to $PRIMARY_NODE 6443"
         sleep 1s
       fi
     done
-
-    if [ "$K3S_ROLE" == "master" ];
+    if [ ! -z "$ACTIVE_PRIMARY_NODE" ];
     then
-      echo "installing master mode"
-      curl -sfL https://get.k3s.io | INSTALL_K3S_EXEC="$INSTALL_MODE" sh -s - --server https://$PRIMARY_NODE:6443 $BASE_OPTS $MASTER_OPTS
-    else
-      echo "installing agent mode"
-      curl -sfL https://get.k3s.io | INSTALL_K3S_EXEC="$INSTALL_MODE" sh -s - --server https://$PRIMARY_NODE:6443 $BASE_OPTS
-    fi
-
-    if [ $? -eq 0 ]
-    then
-      echo "Install k3s on $PRIMARY_NODE succeeded"
-
-      kubectl_settings
-
-      exit 0
+      echo "found primary: $PRIMARY_NODE 6443"
+      break
     fi
   done
+
+  if [ "$K3S_ROLE" == "master" ];
+  then
+    echo "installing master mode"
+    curl -sfL https://get.k3s.io | INSTALL_K3S_EXEC="$INSTALL_MODE" sh -s - --server https://$ACTIVE_PRIMARY_NODE:6443 $BASE_OPTS $MASTER_OPTS
+  else
+    echo "installing agent mode"
+    curl -sfL https://get.k3s.io | INSTALL_K3S_EXEC="$INSTALL_MODE" sh -s - --server https://$ACTIVE_PRIMARY_NODE:6443 $BASE_OPTS
+  fi
+
+  if [ $? -eq 0 ]
+  then
+    echo "Install k3s on $ACTIVE_PRIMARY_NODE succeeded"
+
+    kubectl_settings
+
+    exit 0
+  fi
 }
 
 if [ "$K3S_ROLE" == "master" ];
